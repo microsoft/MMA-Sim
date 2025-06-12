@@ -1,6 +1,6 @@
 #if __CUDACC_VER_MAJOR__ > 12 || __CUDACC_VER_MAJOR__ == 12 && __CUDACC_VER_MINOR__ >= 8
 
-#include <cudaTypedefs.h>
+#include <stdint.h>
 
 __global__ void mma_m16n8k32_row_col_f16_e5m2_e5m2_f16_kernel(
     uint16_t *d, uint8_t *a, uint8_t *b, uint16_t *c)

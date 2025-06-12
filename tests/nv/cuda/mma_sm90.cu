@@ -1,4 +1,4 @@
-#include <cudaTypedefs.h>
+#include <stdint.h>
 
 __global__ void wgmma_m64n8k16_row_col_f16_f16_f16_kernel(
     uint16_t *d, uint16_t *a, uint16_t *b)

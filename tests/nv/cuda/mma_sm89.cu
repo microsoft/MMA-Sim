@@ -1,4 +1,4 @@
-#include <cudaTypedefs.h>
+#include <stdint.h>
 
 __global__ void mma_m16n8k32_row_col_f32_e5m2_e5m2_f32_kernel(
     float *d, uint8_t *a, uint8_t *b, float *c)
