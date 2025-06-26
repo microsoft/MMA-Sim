@@ -4,9 +4,9 @@ using float32x4 = __attribute__((__vector_size__(4 * sizeof(float)))) float;
 using float32x16 = __attribute__((__vector_size__(16 * sizeof(float)))) float;
 using float32x32 = __attribute__((__vector_size__(32 * sizeof(float)))) float;
 using float16x4 = __attribute__((__vector_size__(4 * sizeof(_Float16)))) _Float16;
-using bfloat16x2 = __attribute__((__vector_size__(2 * sizeof(int16_t)))) int16_t;
+using bfloat16x4 = __attribute__((__vector_size__(4 * sizeof(int16_t)))) int16_t;
 
-__global__ void mfma_f32_32x32x2f32_kernel(float *d, float *a, float *b, float *c)
+__global__ void mfma_f32_32x32x2_f32_kernel(float *d, float *a, float *b, float *c)
 {
     uint32_t tid = threadIdx.x;
     float a_frag;
@@ -39,7 +39,7 @@ __global__ void mfma_f32_32x32x2f32_kernel(float *d, float *a, float *b, float *
     }
 }
 
-__global__ void mfma_f32_32x32x1f32_kernel(float *d, float *a, float *b, float *c)
+__global__ void mfma_f32_32x32x1_2b_f32_kernel(float *d, float *a, float *b, float *c)
 {
     uint32_t tid = threadIdx.x;
     float a_frag;
@@ -72,7 +72,7 @@ __global__ void mfma_f32_32x32x1f32_kernel(float *d, float *a, float *b, float *
     }
 }
 
-__global__ void mfma_f32_16x16x4f32_kernel(float *d, float *a, float *b, float *c)
+__global__ void mfma_f32_16x16x4_f32_kernel(float *d, float *a, float *b, float *c)
 {
     uint32_t tid = threadIdx.x;
     float a_frag;
@@ -105,7 +105,7 @@ __global__ void mfma_f32_16x16x4f32_kernel(float *d, float *a, float *b, float *
     }
 }
 
-__global__ void mfma_f32_16x16x1f32_kernel(float *d, float *a, float *b, float *c)
+__global__ void mfma_f32_16x16x1_4b_f32_kernel(float *d, float *a, float *b, float *c)
 {
     uint32_t tid = threadIdx.x;
     float a_frag;
@@ -138,7 +138,7 @@ __global__ void mfma_f32_16x16x1f32_kernel(float *d, float *a, float *b, float *
     }
 }
 
-__global__ void mfma_f32_4x4x1f32_kernel(float *d, float *a, float *b, float *c)
+__global__ void mfma_f32_4x4x1_16b_f32_kernel(float *d, float *a, float *b, float *c)
 {
     uint32_t tid = threadIdx.x;
     float a_frag;
@@ -171,7 +171,7 @@ __global__ void mfma_f32_4x4x1f32_kernel(float *d, float *a, float *b, float *c)
     }
 }
 
-__global__ void mfma_f32_32x32x8f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
+__global__ void mfma_f32_32x32x8_f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
 {
     uint32_t tid = threadIdx.x;
     float16x4 a_frag;
@@ -210,7 +210,7 @@ __global__ void mfma_f32_32x32x8f16_kernel(float *d, _Float16 *a, _Float16 *b, f
     }
 }
 
-__global__ void mfma_f32_32x32x4f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
+__global__ void mfma_f32_32x32x4_2b_f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
 {
     uint32_t tid = threadIdx.x;
     float16x4 a_frag;
@@ -249,7 +249,7 @@ __global__ void mfma_f32_32x32x4f16_kernel(float *d, _Float16 *a, _Float16 *b, f
     }
 }
 
-__global__ void mfma_f32_16x16x16f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
+__global__ void mfma_f32_16x16x16_f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
 {
     uint32_t tid = threadIdx.x;
     float16x4 a_frag;
@@ -288,7 +288,7 @@ __global__ void mfma_f32_16x16x16f16_kernel(float *d, _Float16 *a, _Float16 *b, 
     }
 }
 
-__global__ void mfma_f32_16x16x4f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
+__global__ void mfma_f32_16x16x4_4b_f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
 {
     uint32_t tid = threadIdx.x;
     float16x4 a_frag;
@@ -327,7 +327,7 @@ __global__ void mfma_f32_16x16x4f16_kernel(float *d, _Float16 *a, _Float16 *b, f
     }
 }
 
-__global__ void mfma_f32_4x4x4f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
+__global__ void mfma_f32_4x4x4_16b_f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
 {
     uint32_t tid = threadIdx.x;
     float16x4 a_frag;
@@ -366,102 +366,102 @@ __global__ void mfma_f32_4x4x4f16_kernel(float *d, _Float16 *a, _Float16 *b, flo
     }
 }
 
-__global__ void mfma_f32_32x32x4bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
+__global__ void mfma_f32_32x32x8_bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
 {
     uint32_t tid = threadIdx.x;
-    bfloat16x2 a_frag;
-    bfloat16x2 b_frag;
+    bfloat16x4 a_frag;
+    bfloat16x4 b_frag;
     float32x16 c_frag;
     float32x16 d_frag;
     // load a
-    for (uint32_t i = 0; i < 2; i++)
+    for (uint32_t i = 0; i < 4; i++)
     {
         uint32_t row = tid % 32;
-        uint32_t col = tid / 32 * 2 + i;
-        a_frag[i] = a[row * 4 + col];
-    }
-    // load b
-    for (uint32_t i = 0; i < 2; i++)
-    {
-        uint32_t row = tid / 32 * 2 + i;
-        uint32_t col = tid % 32;
-        b_frag[i] = b[row * 32 + col];
-    }
-    // load c
-    for (uint32_t i = 0; i < 16; i++)
-    {
-        uint32_t row = tid / 32 * 4 + i / 4 * 8 + i % 4;
-        uint32_t col = tid % 32;
-        c_frag[i] = c[row * 32 + col];
-    }
-    // mfma
-    d_frag = __builtin_amdgcn_mfma_f32_32x32x4bf16(a_frag, b_frag, c_frag, 0, 0, 0);
-    // store d
-    for (uint32_t i = 0; i < 16; i++)
-    {
-        uint32_t row = tid / 32 * 4 + i / 4 * 8 + i % 4;
-        uint32_t col = tid % 32;
-        d[row * 32 + col] = d_frag[i];
-    }
-}
-
-__global__ void mfma_f32_32x32x2bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
-{
-    uint32_t tid = threadIdx.x;
-    bfloat16x2 a_frag;
-    bfloat16x2 b_frag;
-    float32x32 c_frag;
-    float32x32 d_frag;
-    // load a
-    for (uint32_t i = 0; i < 2; i++)
-    {
-        uint32_t row = tid % 32;
-        uint32_t col = i;
-        a_frag[i] = a[row * 2 + col];
-    }
-    // load b
-    for (uint32_t i = 0; i < 2; i++)
-    {
-        uint32_t row = i;
-        uint32_t col = tid % 32;
-        b_frag[i] = b[row * 32 + col];
-    }
-    // load c
-    for (uint32_t i = 0; i < 32; i++)
-    {
-        uint32_t row = tid / 32 * 4 + i / 4 * 8 % 32 + i % 4;
-        uint32_t col = tid % 32;
-        c_frag[i] = c[row * 32 + col];
-    }
-    // mfma
-    d_frag = __builtin_amdgcn_mfma_f32_32x32x2bf16(a_frag, b_frag, c_frag, 0, 0, 0);
-    // store d
-    for (uint32_t i = 0; i < 32; i++)
-    {
-        uint32_t row = tid / 32 * 4 + i / 4 * 8 % 32 + i % 4;
-        uint32_t col = tid % 32;
-        d[row * 32 + col] = d_frag[i];
-    }
-}
-
-__global__ void mfma_f32_16x16x8bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
-{
-    uint32_t tid = threadIdx.x;
-    bfloat16x2 a_frag;
-    bfloat16x2 b_frag;
-    float32x4 c_frag;
-    float32x4 d_frag;
-    // load a
-    for (uint32_t i = 0; i < 2; i++)
-    {
-        uint32_t row = tid % 16;
-        uint32_t col = tid / 16 * 2 + i;
+        uint32_t col = tid / 32 * 4 + i;
         a_frag[i] = a[row * 8 + col];
     }
     // load b
-    for (uint32_t i = 0; i < 2; i++)
+    for (uint32_t i = 0; i < 4; i++)
     {
-        uint32_t row = tid / 16 * 2 + i;
+        uint32_t row = tid / 32 * 4 + i;
+        uint32_t col = tid % 32;
+        b_frag[i] = b[row * 32 + col];
+    }
+    // load c
+    for (uint32_t i = 0; i < 16; i++)
+    {
+        uint32_t row = tid / 32 * 4 + i / 4 * 8 % 32 + i % 4;
+        uint32_t col = tid % 32;
+        c_frag[i] = c[row * 32 + col];
+    }
+    // mfma
+    d_frag = __builtin_amdgcn_mfma_f32_32x32x8bf16_1k(a_frag, b_frag, c_frag, 0, 0, 0);
+    // store d
+    for (uint32_t i = 0; i < 16; i++)
+    {
+        uint32_t row = tid / 32 * 4 + i / 4 * 8 % 32 + i % 4;
+        uint32_t col = tid % 32;
+        d[row * 32 + col] = d_frag[i];
+    }
+}
+
+__global__ void mfma_f32_32x32x4_2b_bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
+{
+    uint32_t tid = threadIdx.x;
+    bfloat16x4 a_frag;
+    bfloat16x4 b_frag;
+    float32x32 c_frag;
+    float32x32 d_frag;
+    // load a
+    for (uint32_t i = 0; i < 4; i++)
+    {
+        uint32_t row = tid % 32;
+        uint32_t col = i;
+        a_frag[i] = a[row * 4 + col];
+    }
+    // load b
+    for (uint32_t i = 0; i < 4; i++)
+    {
+        uint32_t row = i;
+        uint32_t col = tid % 32;
+        b_frag[i] = b[row * 32 + col];
+    }
+    // load c
+    for (uint32_t i = 0; i < 32; i++)
+    {
+        uint32_t row = tid / 32 * 4 + i / 4 * 8 % 32 + i % 4;
+        uint32_t col = tid % 32;
+        c_frag[i] = c[row * 32 + col];
+    }
+    // mfma
+    d_frag = __builtin_amdgcn_mfma_f32_32x32x4bf16_1k(a_frag, b_frag, c_frag, 0, 0, 0);
+    // store d
+    for (uint32_t i = 0; i < 32; i++)
+    {
+        uint32_t row = tid / 32 * 4 + i / 4 * 8 % 32 + i % 4;
+        uint32_t col = tid % 32;
+        d[row * 32 + col] = d_frag[i];
+    }
+}
+
+__global__ void mfma_f32_16x16x16_bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
+{
+    uint32_t tid = threadIdx.x;
+    bfloat16x4 a_frag;
+    bfloat16x4 b_frag;
+    float32x4 c_frag;
+    float32x4 d_frag;
+    // load a
+    for (uint32_t i = 0; i < 4; i++)
+    {
+        uint32_t row = tid % 16;
+        uint32_t col = tid / 16 * 4 + i;
+        a_frag[i] = a[row * 16 + col];
+    }
+    // load b
+    for (uint32_t i = 0; i < 4; i++)
+    {
+        uint32_t row = tid / 16 * 4 + i;
         uint32_t col = tid % 16;
         b_frag[i] = b[row * 16 + col];
     }
@@ -473,7 +473,7 @@ __global__ void mfma_f32_16x16x8bf16_kernel(float *d, int16_t *a, int16_t *b, fl
         c_frag[i] = c[row * 16 + col];
     }
     // mfma
-    d_frag = __builtin_amdgcn_mfma_f32_16x16x8bf16(a_frag, b_frag, c_frag, 0, 0, 0);
+    d_frag = __builtin_amdgcn_mfma_f32_16x16x16bf16_1k(a_frag, b_frag, c_frag, 0, 0, 0);
     // store d
     for (uint32_t i = 0; i < 4; i++)
     {
@@ -483,22 +483,22 @@ __global__ void mfma_f32_16x16x8bf16_kernel(float *d, int16_t *a, int16_t *b, fl
     }
 }
 
-__global__ void mfma_f32_16x16x2bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
+__global__ void mfma_f32_16x16x4_4b_bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
 {
     uint32_t tid = threadIdx.x;
-    bfloat16x2 a_frag;
-    bfloat16x2 b_frag;
+    bfloat16x4 a_frag;
+    bfloat16x4 b_frag;
     float32x16 c_frag;
     float32x16 d_frag;
     // load a
-    for (uint32_t i = 0; i < 2; i++)
+    for (uint32_t i = 0; i < 4; i++)
     {
         uint32_t row = tid % 16;
         uint32_t col = i;
-        a_frag[i] = a[row * 2 + col];
+        a_frag[i] = a[row * 4 + col];
     }
     // load b
-    for (uint32_t i = 0; i < 2; i++)
+    for (uint32_t i = 0; i < 4; i++)
     {
         uint32_t row = i;
         uint32_t col = tid % 16;
@@ -512,7 +512,7 @@ __global__ void mfma_f32_16x16x2bf16_kernel(float *d, int16_t *a, int16_t *b, fl
         c_frag[i] = c[row * 16 + col];
     }
     // mfma
-    d_frag = __builtin_amdgcn_mfma_f32_16x16x2bf16(a_frag, b_frag, c_frag, 0, 0, 0);
+    d_frag = __builtin_amdgcn_mfma_f32_16x16x4bf16_1k(a_frag, b_frag, c_frag, 0, 0, 0);
     // store d
     for (uint32_t i = 0; i < 16; i++)
     {
@@ -522,22 +522,22 @@ __global__ void mfma_f32_16x16x2bf16_kernel(float *d, int16_t *a, int16_t *b, fl
     }
 }
 
-__global__ void mfma_f32_4x4x2bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
+__global__ void mfma_f32_4x4x4_16b_bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
 {
     uint32_t tid = threadIdx.x;
-    bfloat16x2 a_frag;
-    bfloat16x2 b_frag;
+    bfloat16x4 a_frag;
+    bfloat16x4 b_frag;
     float32x4 c_frag;
     float32x4 d_frag;
     // load a
-    for (uint32_t i = 0; i < 2; i++)
+    for (uint32_t i = 0; i < 4; i++)
     {
         uint32_t row = tid % 4;
         uint32_t col = i;
-        a_frag[i] = a[row * 2 + col];
+        a_frag[i] = a[row * 4 + col];
     }
     // load b
-    for (uint32_t i = 0; i < 2; i++)
+    for (uint32_t i = 0; i < 4; i++)
     {
         uint32_t row = i;
         uint32_t col = tid % 4;
@@ -551,7 +551,7 @@ __global__ void mfma_f32_4x4x2bf16_kernel(float *d, int16_t *a, int16_t *b, floa
         c_frag[i] = c[row * 4 + col];
     }
     // mfma
-    d_frag = __builtin_amdgcn_mfma_f32_4x4x2bf16(a_frag, b_frag, c_frag, 0, 0, 0);
+    d_frag = __builtin_amdgcn_mfma_f32_4x4x4bf16_1k(a_frag, b_frag, c_frag, 0, 0, 0);
     // store d
     for (uint32_t i = 0; i < 4; i++)
     {
@@ -561,107 +561,107 @@ __global__ void mfma_f32_4x4x2bf16_kernel(float *d, int16_t *a, int16_t *b, floa
     }
 }
 
-extern "C" void mfma_f32_32x32x2f32(float *d, float *a, float *b, float *c)
+extern "C" void mfma_f32_32x32x2_f32(float *d, float *a, float *b, float *c)
 {
     dim3 grid(1);
     dim3 block(64);
-    mfma_f32_32x32x2f32_kernel<<<grid, block>>>(d, a, b, c);
+    mfma_f32_32x32x2_f32_kernel<<<grid, block>>>(d, a, b, c);
 }
 
-extern "C" void mfma_f32_32x32x1f32(float *d, float *a, float *b, float *c)
+extern "C" void mfma_f32_32x32x1_2b_f32(float *d, float *a, float *b, float *c)
 {
     dim3 grid(1);
     dim3 block(64);
-    mfma_f32_32x32x1f32_kernel<<<grid, block>>>(d, a, b, c);
+    mfma_f32_32x32x1_2b_f32_kernel<<<grid, block>>>(d, a, b, c);
 }
 
-extern "C" void mfma_f32_16x16x4f32(float *d, float *a, float *b, float *c)
+extern "C" void mfma_f32_16x16x4_f32(float *d, float *a, float *b, float *c)
 {
     dim3 grid(1);
     dim3 block(64);
-    mfma_f32_16x16x4f32_kernel<<<grid, block>>>(d, a, b, c);
+    mfma_f32_16x16x4_f32_kernel<<<grid, block>>>(d, a, b, c);
 }
 
-extern "C" void mfma_f32_16x16x1f32(float *d, float *a, float *b, float *c)
+extern "C" void mfma_f32_16x16x1_4b_f32(float *d, float *a, float *b, float *c)
 {
     dim3 grid(1);
     dim3 block(64);
-    mfma_f32_16x16x1f32_kernel<<<grid, block>>>(d, a, b, c);
+    mfma_f32_16x16x1_4b_f32_kernel<<<grid, block>>>(d, a, b, c);
 }
 
-extern "C" void mfma_f32_4x4x1f32(float *d, float *a, float *b, float *c)
+extern "C" void mfma_f32_4x4x1_16b_f32(float *d, float *a, float *b, float *c)
 {
     dim3 grid(1);
     dim3 block(64);
-    mfma_f32_4x4x1f32_kernel<<<grid, block>>>(d, a, b, c);
+    mfma_f32_4x4x1_16b_f32_kernel<<<grid, block>>>(d, a, b, c);
 }
 
-extern "C" void mfma_f32_32x32x8f16(float *d, _Float16 *a, _Float16 *b, float *c)
+extern "C" void mfma_f32_32x32x8_f16(float *d, _Float16 *a, _Float16 *b, float *c)
 {
     dim3 grid(1);
     dim3 block(64);
-    mfma_f32_32x32x8f16_kernel<<<grid, block>>>(d, a, b, c);
+    mfma_f32_32x32x8_f16_kernel<<<grid, block>>>(d, a, b, c);
 }
 
-extern "C" void mfma_f32_32x32x4f16(float *d, _Float16 *a, _Float16 *b, float *c)
+extern "C" void mfma_f32_32x32x4_2b_f16(float *d, _Float16 *a, _Float16 *b, float *c)
 {
     dim3 grid(1);
     dim3 block(64);
-    mfma_f32_32x32x4f16_kernel<<<grid, block>>>(d, a, b, c);
+    mfma_f32_32x32x4_2b_f16_kernel<<<grid, block>>>(d, a, b, c);
 }
 
-extern "C" void mfma_f32_16x16x16f16(float *d, _Float16 *a, _Float16 *b, float *c)
+extern "C" void mfma_f32_16x16x16_f16(float *d, _Float16 *a, _Float16 *b, float *c)
 {
     dim3 grid(1);
     dim3 block(64);
-    mfma_f32_16x16x16f16_kernel<<<grid, block>>>(d, a, b, c);
+    mfma_f32_16x16x16_f16_kernel<<<grid, block>>>(d, a, b, c);
 }
 
-extern "C" void mfma_f32_16x16x4f16(float *d, _Float16 *a, _Float16 *b, float *c)
+extern "C" void mfma_f32_16x16x4_4b_f16(float *d, _Float16 *a, _Float16 *b, float *c)
 {
     dim3 grid(1);
     dim3 block(64);
-    mfma_f32_16x16x4f16_kernel<<<grid, block>>>(d, a, b, c);
+    mfma_f32_16x16x4_4b_f16_kernel<<<grid, block>>>(d, a, b, c);
 }
 
-extern "C" void mfma_f32_4x4x4f16(float *d, _Float16 *a, _Float16 *b, float *c)
+extern "C" void mfma_f32_4x4x4_16b_f16(float *d, _Float16 *a, _Float16 *b, float *c)
 {
     dim3 grid(1);
     dim3 block(64);
-    mfma_f32_4x4x4f16_kernel<<<grid, block>>>(d, a, b, c);
+    mfma_f32_4x4x4_16b_f16_kernel<<<grid, block>>>(d, a, b, c);
 }
 
-extern "C" void mfma_f32_32x32x4bf16(float *d, int16_t *a, int16_t *b, float *c)
+extern "C" void mfma_f32_32x32x8_bf16(float *d, int16_t *a, int16_t *b, float *c)
 {
     dim3 grid(1);
     dim3 block(64);
-    mfma_f32_32x32x4bf16_kernel<<<grid, block>>>(d, a, b, c);
+    mfma_f32_32x32x8_bf16_kernel<<<grid, block>>>(d, a, b, c);
 }
 
-extern "C" void mfma_f32_32x32x2bf16(float *d, int16_t *a, int16_t *b, float *c)
+extern "C" void mfma_f32_32x32x4_2b_bf16(float *d, int16_t *a, int16_t *b, float *c)
 {
     dim3 grid(1);
     dim3 block(64);
-    mfma_f32_32x32x2bf16_kernel<<<grid, block>>>(d, a, b, c);
+    mfma_f32_32x32x4_2b_bf16_kernel<<<grid, block>>>(d, a, b, c);
 }
 
-extern "C" void mfma_f32_16x16x8bf16(float *d, int16_t *a, int16_t *b, float *c)
+extern "C" void mfma_f32_16x16x16_bf16(float *d, int16_t *a, int16_t *b, float *c)
 {
     dim3 grid(1);
     dim3 block(64);
-    mfma_f32_16x16x8bf16_kernel<<<grid, block>>>(d, a, b, c);
+    mfma_f32_16x16x16_bf16_kernel<<<grid, block>>>(d, a, b, c);
 }
 
-extern "C" void mfma_f32_16x16x2bf16(float *d, int16_t *a, int16_t *b, float *c)
+extern "C" void mfma_f32_16x16x4_4b_bf16(float *d, int16_t *a, int16_t *b, float *c)
 {
     dim3 grid(1);
     dim3 block(64);
-    mfma_f32_16x16x2bf16_kernel<<<grid, block>>>(d, a, b, c);
+    mfma_f32_16x16x4_4b_bf16_kernel<<<grid, block>>>(d, a, b, c);
 }
 
-extern "C" void mfma_f32_4x4x2bf16(float *d, int16_t *a, int16_t *b, float *c)
+extern "C" void mfma_f32_4x4x4_16b_bf16(float *d, int16_t *a, int16_t *b, float *c)
 {
     dim3 grid(1);
     dim3 block(64);
-    mfma_f32_4x4x2bf16_kernel<<<grid, block>>>(d, a, b, c);
+    mfma_f32_4x4x4_16b_bf16_kernel<<<grid, block>>>(d, a, b, c);
 }

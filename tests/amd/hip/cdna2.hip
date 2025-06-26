@@ -28,7 +28,7 @@ __global__ void mfma_f32_32x32x8bf16_1k_kernel(float *d, int16_t *a, int16_t *b,
         b_frag[i] = b[row * 32 + col];
     }
     // load c
-    for (uint32_t i = 0; i < 32; i++)
+    for (uint32_t i = 0; i < 16; i++)
     {
         uint32_t row = tid / 32 * 4 + i / 4 * 8 % 32 + i % 4;
         uint32_t col = tid % 32;
@@ -37,7 +37,7 @@ __global__ void mfma_f32_32x32x8bf16_1k_kernel(float *d, int16_t *a, int16_t *b,
     // mfma
     d_frag = __builtin_amdgcn_mfma_f32_32x32x8bf16_1k(a_frag, b_frag, c_frag, 0, 0, 0);
     // store d
-    for (uint32_t i = 0; i < 32; i++)
+    for (uint32_t i = 0; i < 16; i++)
     {
         uint32_t row = tid / 32 * 4 + i / 4 * 8 % 32 + i % 4;
         uint32_t col = tid % 32;
