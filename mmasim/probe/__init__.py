@@ -95,7 +95,7 @@ def is_pairwise_sum(intrinsic: Intrinsic, group_size: int) -> bool:
                 l |= l >> 8
                 l |= l >> 16
                 l += 1
-                if dotadd(a, b, c) != (K - l) * y * y:
+                if dotadd(a, b, c) != (K + 1 - l) * y * y:
                     return False
                 a[i + k] = b[i + k] = y
         i += group_size
