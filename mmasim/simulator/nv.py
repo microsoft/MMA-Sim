@@ -27,28 +27,29 @@ ampere_mma_qualifiers = turing_mma_qualifiers + [
     "m16n8k16.f32.bf16.bf16.f32",
 ]
 adalovelace_mma_qualifiers = ampere_mma_qualifiers + [
-    # sm_89 fp8 m16n8k32 f32_accum
+    # sm_89 fp8 m16n8k32 f32_output
     "m16n8k32.f32.e5m2.e5m2.f32",
     "m16n8k32.f32.e5m2.e4m3.f32",
     "m16n8k32.f32.e4m3.e5m2.f32",
     "m16n8k32.f32.e4m3.e4m3.f32",
-    # sm_89 fp8 m16n8k16 f32_accum
+    # sm_89 fp8 m16n8k16 f32_output
     "m16n8k16.f32.e5m2.e5m2.f32",
     "m16n8k16.f32.e5m2.e4m3.f32",
     "m16n8k16.f32.e4m3.e5m2.f32",
     "m16n8k16.f32.e4m3.e4m3.f32",
-    # sm_89 fp8 m16n8k32 f16_accum
+    # sm_89 fp8 m16n8k32 f16_output
     "m16n8k32.f16.e5m2.e5m2.f16",
     "m16n8k32.f16.e5m2.e4m3.f16",
     "m16n8k32.f16.e4m3.e5m2.f16",
     "m16n8k32.f16.e4m3.e4m3.f16",
-    # sm_89 fp8 m16n8k16 f16_accum
+    # sm_89 fp8 m16n8k16 f16_output
     "m16n8k16.f16.e5m2.e5m2.f16",
     "m16n8k16.f16.e5m2.e4m3.f16",
     "m16n8k16.f16.e4m3.e5m2.f16",
     "m16n8k16.f16.e4m3.e4m3.f16",
 ]
 hopper_mma_qualifiers = ampere_mma_qualifiers
+blackwell_mma_qualifiers = ampere_mma_qualifiers
 rtxblackwell_mma_qualifiers = adalovelace_mma_qualifiers
 
 hopper_wgmma_qualifiers = (
@@ -75,6 +76,7 @@ arch_mma_qualifiers = {
     "Ampere": ampere_mma_qualifiers,
     "Ada Lovelace": adalovelace_mma_qualifiers,
     "Hopper": hopper_mma_qualifiers,
+    "Blackwell": blackwell_mma_qualifiers,
     "RTX Blackwell": rtxblackwell_mma_qualifiers,
 }
 
@@ -89,6 +91,7 @@ arch_accum_fraction_bits = {
     "Ampere": 24,
     "Ada Lovelace": 24,
     "Hopper": 25,
+    "Blackwell": 25,
     "RTX Blackwell": 25,
 }
 

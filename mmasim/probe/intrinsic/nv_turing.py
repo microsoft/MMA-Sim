@@ -8,13 +8,13 @@ path = pathlib.Path(__file__).parent / "impl/nv_turing.so"
 lib = ctypes.CDLL(str(path))
 
 # f16
-lib.mma_m16n8k8_row_col_f16_f16_f16_f16.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k8_row_col_f32_f16_f16_f32.argtypes = [ctypes.c_void_p] * 4
+lib.mma_m16n8k8_f16_f16_f16_f16.argtypes = [ctypes.c_void_p] * 4
+lib.mma_m16n8k8_f32_f16_f16_f32.argtypes = [ctypes.c_void_p] * 4
 
 mma_intrinsic_impls = {
     # f16
-    "m16n8k8.f16.f16.f16.f16": lib.mma_m16n8k8_row_col_f16_f16_f16_f16,
-    "m16n8k8.f32.f16.f16.f32": lib.mma_m16n8k8_row_col_f32_f16_f16_f32,
+    "m16n8k8.f16.f16.f16.f16": lib.mma_m16n8k8_f16_f16_f16_f16,
+    "m16n8k8.f32.f16.f16.f32": lib.mma_m16n8k8_f32_f16_f16_f32,
 }
 mma_intrinsics = {
     qualifier: NV_MMA(qualifier, mma_intrinsic_impls[qualifier])

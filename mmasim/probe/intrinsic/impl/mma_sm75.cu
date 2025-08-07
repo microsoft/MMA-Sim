@@ -2,7 +2,7 @@
 
 extern "C" // fp16
 {
-    __global__ void mma_m16n8k8_row_col_f16_f16_f16_f16_kernel(
+    __global__ void mma_m16n8k8_f16_f16_f16_f16_kernel(
         uint16_t *d, uint16_t *a, uint16_t *b, uint16_t *c)
     {
         const uint32_t N = 8, K = 8;
@@ -36,11 +36,11 @@ extern "C" // fp16
             c_frag[i / 2] = *(uint32_t *)(c + row * N + col);
         }
         // mma
-        asm volatile("mma.sync.aligned.m16n8k8.row.col.f16.f16.f16.f16"
-                     "{%0,  %1},"
-                     "{%2,  %3},"
-                     "{%4},"
-                     "{%5,  %6};"
+        asm volatile("mma.sync.aligned.m16n8k8.row.col.f16.f16.f16.f16 "
+                     "{%0, %1}, "
+                     "{%2, %3}, "
+                     "{%4}, "
+                     "{%5, %6};"
                      : "=r"(d_frag[0]), "=r"(d_frag[1])
                      : "r"(a_frag[0]), "r"(a_frag[1]),
                        "r"(b_frag[0]),
@@ -54,7 +54,7 @@ extern "C" // fp16
         }
     }
 
-    __global__ void mma_m16n8k8_row_col_f32_f16_f16_f32_kernel(
+    __global__ void mma_m16n8k8_f32_f16_f16_f32_kernel(
         float *d, uint16_t *a, uint16_t *b, float *c)
     {
         const uint32_t N = 8, K = 8;
@@ -85,14 +85,14 @@ extern "C" // fp16
         {
             row = i < 2 ? groupid : groupid + 8;
             col = (threadID_in_group * 2) + (i & 0x1);
-            c_frag[i] = *(c + row * N + col);
+            c_frag[i] = c[row* N + col];
         }
         // mma
-        asm volatile("mma.sync.aligned.m16n8k8.row.col.f32.f16.f16.f32"
-                     "{%0,  %1,  %2,  %3},"
-                     "{%4,  %5},"
-                     "{%6},"
-                     "{%7,  %8,  %9,  %10};"
+        asm volatile("mma.sync.aligned.m16n8k8.row.col.f32.f16.f16.f32 "
+                     "{%0, %1, %2, %3}, "
+                     "{%4, %5}, "
+                     "{%6}, "
+                     "{%7, %8, %9, %10};"
                      : "=f"(d_frag[0]), "=f"(d_frag[1]), "=f"(d_frag[2]), "=f"(d_frag[3])
                      : "r"(a_frag[0]), "r"(a_frag[1]),
                        "r"(b_frag[0]),
@@ -102,19 +102,19 @@ extern "C" // fp16
         {
             row = i < 2 ? groupid : groupid + 8;
             col = (threadID_in_group * 2) + (i & 0x1);
-            *(d + row * N + col) = d_frag[i];
+            d[row* N + col] = d_frag[i];
         }
     }
 
-    void mma_m16n8k8_row_col_f16_f16_f16_f16(
+    void mma_m16n8k8_f16_f16_f16_f16(
         uint16_t *d, uint16_t *a, uint16_t *b, uint16_t *c)
     {
-        mma_m16n8k8_row_col_f16_f16_f16_f16_kernel<<<1, 32>>>(d, a, b, c);
+        mma_m16n8k8_f16_f16_f16_f16_kernel<<<1, 32>>>(d, a, b, c);
     }
 
-    void mma_m16n8k8_row_col_f32_f16_f16_f32(
+    void mma_m16n8k8_f32_f16_f16_f32(
         float *d, uint16_t *a, uint16_t *b, float *c)
     {
-        mma_m16n8k8_row_col_f32_f16_f16_f32_kernel<<<1, 32>>>(d, a, b, c);
+        mma_m16n8k8_f32_f16_f16_f32_kernel<<<1, 32>>>(d, a, b, c);
     }
 }
