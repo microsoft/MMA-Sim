@@ -19,5 +19,5 @@ if __name__ == "__main__":
             print("    Accumulation order: sequential")
         else:
             print(
-                f"    Accumulation order: sequential sum of c and {intrinsic.k//gsz} partial sum(s), each computed as the pairwise sum {gsz} terms"
+                f"    Accumulation order: sequential sum of c and {intrinsic.k//gsz} partial sum(s), each computed as the pairwise sum of {gsz} terms"
             )

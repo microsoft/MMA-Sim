@@ -205,3 +205,41 @@ class WGMMA(NV_WGMMABase):
         NV_WGMMABase.__init__(self, qualifier)
 
         self.n_accum_fraction_bits = arch_accum_fraction_bits[arch]
+        self.output_type = "f32" if self.d_type == torch.float32 else "f16"
+        if self.a_type in [
+            torch.float8_e5m2,
+            torch.float8_e4m3fn,
+        ]:
+            self.n_accum_fraction_bits = 13
+            if self.output_type == "f32":
+                self.output_type = "f32_e8m13"
+
+    def __call__(
+        self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor
+    ) -> torch.Tensor:
+        m, n, k = self.m, self.n, self.k
+        assert a.shape == (m, k)
+        assert b.shape == (k, n)
+        assert c.shape == (m, n)
+        assert a.dtype == self.a_type
+        assert b.dtype == self.b_type
+        assert c.dtype == self.c_type
+        a = a.cpu()
+        b = b.cpu()
+        c = c.cpu()
+        d = torch.zeros((m, n), dtype=self.d_type)
+        if self.a_type == torch.float32:  # tf32
+            a = truncate_to_tf32(a)
+            b = truncate_to_tf32(b)
+        for i in range(m):
+            for j in range(n):
+                sum = c[i, j]
+                sum = nv_fused_dot_add(
+                    a[i, :],
+                    b[:, j],
+                    sum,
+                    n_fraction_bits=self.n_accum_fraction_bits,
+                    output_type=self.output_type,
+                )
+                d[i][j] = sum
+        return d
