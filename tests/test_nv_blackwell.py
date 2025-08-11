@@ -1,5 +1,5 @@
-from mmasim.probe.intrinsic.nv_blackwell import mma_intrinsics
-from mmasim.simulator.nv import MMA
+from mmasim.probe.intrinsic.nv_blackwell import mma_intrinsics, tcgen05mma_intrinsics
+from mmasim.simulator.nv import MMA, TCGen05MMA
 
 from utils import random_test
 
@@ -8,6 +8,14 @@ if __name__ == "__main__":
         print(f"Testing Blackwell instruction mma.{qualifier}")
         random_test(
             MMA("Blackwell", qualifier),
+            intrinsic,
+            allow_different_nan=False,
+            trials=100,
+        )
+    for qualifier, intrinsic in tcgen05mma_intrinsics.items():
+        print(f"Testing Hopper instruction tcgen05.mma.{qualifier}")
+        random_test(
+            TCGen05MMA("Hopper", qualifier),
             intrinsic,
             allow_different_nan=False,
             trials=100,

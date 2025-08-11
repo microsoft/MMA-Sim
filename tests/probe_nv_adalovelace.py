@@ -1,5 +1,3 @@
-import torch
-
 from mmasim.probe.intrinsic.nv_adalovelace import mma_intrinsics
 from mmasim.probe import ProbeFusedDotAdd, is_fused_dot_add
 
@@ -8,10 +6,10 @@ if __name__ == "__main__":
     for qualifier, intrinsic in mma_intrinsics.items():
         print(f"Testing Ada Lovelace instruction mma.{qualifier}")
         gsz = intrinsic.k
-        if intrinsic.a_type == torch.float32:  # tf32
+        if "tf32" in qualifier:  # tf32
             if intrinsic.k == 8:
                 gsz = 4
-        elif intrinsic.a_type in [torch.float16, torch.bfloat16]:
+        elif "bf16" in qualifier or "f16.f16" in qualifier:  # bf16 or fp16
             if intrinsic.k == 16:
                 gsz = 8
         else:  # fp8

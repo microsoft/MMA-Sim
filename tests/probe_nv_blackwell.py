@@ -1,12 +1,14 @@
-import torch
-
-from mmasim.probe.intrinsic.nv_blackwell import mma_intrinsics
+from mmasim.probe.intrinsic import NV_MMA
+from mmasim.probe.intrinsic.nv_blackwell import mma_intrinsics, tcgen05mma_intrinsics
 from mmasim.probe import ProbeFusedDotAdd, is_fused_dot_add
 
 
 if __name__ == "__main__":
-    for qualifier, intrinsic in mma_intrinsics.items():
-        print(f"Testing Blackwell instruction mma.{qualifier}")
+    for qualifier, intrinsic in (mma_intrinsics | tcgen05mma_intrinsics).items():
+        if isinstance(intrinsic, NV_MMA):
+            print(f"Testing Blackwell instruction mma.{qualifier}")
+        else:
+            print(f"Testing Blackwell instruction tcgen05.mma.{qualifier}")
         gsz = intrinsic.k
         assert is_fused_dot_add(intrinsic, gsz)
         print("    Type: fused dot-add operations")

@@ -1,5 +1,3 @@
-import torch
-
 from mmasim.probe.intrinsic.nv_ampere import mma_intrinsics
 from mmasim.probe import ProbeFusedDotAdd, is_fused_dot_add
 
@@ -8,7 +6,7 @@ if __name__ == "__main__":
     for qualifier, intrinsic in mma_intrinsics.items():
         print(f"Testing Ampere instruction mma.{qualifier}")
         gsz = intrinsic.k
-        if intrinsic.a_type == torch.float32:  # tf32
+        if "tf32" in qualifier:  # tf32
             if intrinsic.k == 8:
                 gsz = 4
         else:  # fp16 or bf16

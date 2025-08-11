@@ -1,4 +1,5 @@
-from mmasim.probe.intrinsic.nv_hopper import mma_intrinsics, wgmma_intrinsics, NV_MMA
+from mmasim.probe.intrinsic import NV_MMA
+from mmasim.probe.intrinsic.nv_hopper import mma_intrinsics, wgmma_intrinsics
 from mmasim.probe import ProbeFusedDotAdd, is_fused_dot_add
 
 

@@ -1,7 +1,7 @@
 import torch
 
 from .utils import truncate_to_tf32, nv_fused_dot_add
-from ..isa import NV_MMABase, NV_WGMMABase
+from ..isa import NV_MMABase, NV_WGMMABase, NV_TCGen05MMABase
 
 
 volta_mma_qualifiers = [
@@ -63,6 +63,29 @@ hopper_wgmma_qualifiers = (
     # sm_90a fp8
     + [
         f"m64n{N}k32.{dtype}.{atype}.{btype}"
+        for N in range(8, 256 + 1, 8)
+        for dtype in ["f32", "f16"]
+        for atype in ["e5m2", "e4m3"]
+        for btype in ["e5m2", "e4m3"]
+    ]
+)
+
+blackwell_tcgen05mma_qualifiers = (
+    # sm_100a tf32
+    [f"m{M}n{N}k8.f32.tf32.tf32" for M in {64, 128} for N in range(8, 256 + 1, 8)]
+    # sm_100a f16 or bf16
+    + [f"m{M}n{N}k16.f16.f16.f16" for M in {64, 128} for N in range(8, 256 + 1, 8)]
+    + [
+        f"m{M}n{N}k16.f32.{atype}.{btype}"
+        for M in {64, 128}
+        for N in range(8, 256 + 1, 8)
+        for atype in ["f16", "bf16"]
+        for btype in ["f16", "bf16"]
+    ]
+    # sm_100a fp8
+    + [
+        f"m{M}n{N}k32.{dtype}.{atype}.{btype}"
+        for M in {64, 128}
         for N in range(8, 256 + 1, 8)
         for dtype in ["f32", "f16"]
         for atype in ["e5m2", "e4m3"]
@@ -213,6 +236,55 @@ class WGMMA(NV_WGMMABase):
             self.n_accum_fraction_bits = 13
             if self.output_type == "f32":
                 self.output_type = "f32_e8m13"
+
+    def __call__(
+        self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor
+    ) -> torch.Tensor:
+        m, n, k = self.m, self.n, self.k
+        assert a.shape == (m, k)
+        assert b.shape == (k, n)
+        assert c.shape == (m, n)
+        assert a.dtype == self.a_type
+        assert b.dtype == self.b_type
+        assert c.dtype == self.c_type
+        a = a.cpu()
+        b = b.cpu()
+        c = c.cpu()
+        d = torch.zeros((m, n), dtype=self.d_type)
+        if self.a_type == torch.float32:  # tf32
+            a = truncate_to_tf32(a)
+            b = truncate_to_tf32(b)
+        for i in range(m):
+            for j in range(n):
+                sum = c[i, j]
+                sum = nv_fused_dot_add(
+                    a[i, :],
+                    b[:, j],
+                    sum,
+                    n_fraction_bits=self.n_accum_fraction_bits,
+                    output_type=self.output_type,
+                )
+                d[i][j] = sum
+        return d
+
+
+class TCGen05MMA(NV_TCGen05MMABase):
+    def __init__(self, arch: str, qualifier: str):
+        assert arch in arch_wgmma_qualifiers.keys(), (
+            f"Unsupported architecture {arch} for TCGen05MMA.\n"
+            f"Supported architectures: {list(arch_wgmma_qualifiers.keys())}"
+        )
+        self.arch = arch
+        supported_qualifiers = arch_wgmma_qualifiers[arch]
+        assert qualifier in supported_qualifiers, (
+            f"Unsupported TCGen05MMA qualifier {qualifier} for {arch} architecture.\n"
+            f"Supported qualifiers: {supported_qualifiers}"
+        )
+        self.qualifier = qualifier
+        NV_TCGen05MMABase.__init__(self, qualifier)
+
+        self.n_accum_fraction_bits = arch_accum_fraction_bits[arch]
+        self.output_type = "f32" if self.d_type == torch.float32 else "f16"
 
     def __call__(
         self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor

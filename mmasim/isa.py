@@ -52,6 +52,18 @@ class NV_WGMMABase(MMAInstructionBase):
         self.d_type = nv_torch_dtype[d_type]
 
 
+class NV_TCGen05MMABase(MMAInstructionBase):
+    def __init__(self, qualifier: str, block_scale: bool = False):
+        shape, d_type, a_type, b_type = qualifier.split(".")
+        self.m, self.n, self.k = nv_shape_to_mnk(shape)
+        self.a_type = nv_torch_dtype[a_type]
+        self.b_type = nv_torch_dtype[b_type]
+        self.c_type = nv_torch_dtype[d_type]
+        self.d_type = nv_torch_dtype[d_type]
+        if block_scale:
+            raise NotImplementedError
+
+
 amd_torch_dtype = {
     "f32": torch.float32,
     "xf32": torch.float32,
