@@ -38,7 +38,6 @@ lib.mfma_f32_32x32x16_fp8_bf8.argtypes = [ctypes.c_void_p] * 4
 lib.mfma_f32_32x32x16_bf8_fp8.argtypes = [ctypes.c_void_p] * 4
 lib.mfma_f32_32x32x16_bf8_bf8.argtypes = [ctypes.c_void_p] * 4
 
-
 mfma_intrinsic_impls = {
     # f32
     "f32_32x32x2_f32": lib.mfma_f32_32x32x2_f32,

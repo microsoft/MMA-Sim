@@ -1,186 +1,75 @@
-#include <hip/hip_runtime.h>
-
-using float32x4 = __attribute__((__vector_size__(4 * sizeof(float)))) float;
-using float32x16 = __attribute__((__vector_size__(16 * sizeof(float)))) float;
-using float32x32 = __attribute__((__vector_size__(32 * sizeof(float)))) float;
-using float16x4 = __attribute__((__vector_size__(4 * sizeof(_Float16)))) _Float16;
-using bfloat16x2 = __attribute__((__vector_size__(2 * sizeof(int16_t)))) int16_t;
+#include "mfma.h"
 
 extern "C" // fp32
 {
     __global__ void mfma_f32_32x32x2f32_kernel(float *d, float *a, float *b, float *c)
     {
         const uint32_t N = 32, K = 2;
-        uint32_t tid = threadIdx.x;
-        uint32_t row, col, i;
-        float a_frag;
-        float b_frag;
-        float32x16 c_frag;
-        float32x16 d_frag;
-        // load a
-        row = tid % 32;
-        col = tid / 32;
-        a_frag = a[row * K + col];
-        // load b
-        row = tid / 32;
-        col = tid % 32;
-        b_frag = b[row * N + col];
-        // load c
-        for (i = 0; i < 16; i++)
-        {
-            row = tid / 32 * 4 + i / 4 * 8 + i % 4;
-            col = tid % 32;
-            c_frag[i] = c[row * N + col];
-        }
-        // mfma
+        uint32_t row, col, i, tid = threadIdx.x;
+        float a_frag, b_frag;
+        float32x16 c_frag, d_frag;
+
+        LOAD_A_M32K2();
+        LOAD_B_N32K2();
+        LOAD_C_M32N32();
         d_frag = __builtin_amdgcn_mfma_f32_32x32x2f32(a_frag, b_frag, c_frag, 0, 0, 0);
-        // store d
-        for (i = 0; i < 16; i++)
-        {
-            row = tid / 32 * 4 + i / 4 * 8 + i % 4;
-            col = tid % 32;
-            d[row * N + col] = d_frag[i];
-        }
+        STORE_D_M32N32();
     }
 
     __global__ void mfma_f32_32x32x1f32_kernel(float *d, float *a, float *b, float *c)
     {
         const uint32_t N = 32, K = 1;
-        uint32_t tid = threadIdx.x;
-        uint32_t row, col, i;
-        float a_frag;
-        float b_frag;
-        float32x32 c_frag;
-        float32x32 d_frag;
-        // load a
-        row = tid % 32;
-        col = 0;
-        a_frag = a[row * K + col];
-        // load b
-        row = 0;
-        col = tid % 32;
-        b_frag = b[row * N + col];
-        // load c
-        for (i = 0; i < 32; i++)
-        {
-            row = tid / 32 * 4 + i / 4 * 8 % 32 + i % 4;
-            col = tid % 32;
-            c_frag[i] = c[row * N + col];
-        }
-        // mfma
+        uint32_t row, col, i, tid = threadIdx.x;
+        float a_frag, b_frag;
+        float32x32 c_frag, d_frag;
+
+        LOAD_A_M32K1_2B();
+        LOAD_B_N32K1_2B();
+        LOAD_C_M32N32_2B();
         d_frag = __builtin_amdgcn_mfma_f32_32x32x1f32(a_frag, b_frag, c_frag, 0, 0, 0);
-        // store d
-        for (i = 0; i < 32; i++)
-        {
-            row = tid / 32 * 4 + i / 4 * 8 % 32 + i % 4;
-            col = tid % 32;
-            d[row * N + col] = d_frag[i];
-        }
+        STORE_D_M32N32_2B();
     }
 
     __global__ void mfma_f32_16x16x4f32_kernel(float *d, float *a, float *b, float *c)
     {
         const uint32_t N = 16, K = 4;
-        uint32_t tid = threadIdx.x;
-        uint32_t row, col, i;
-        float a_frag;
-        float b_frag;
-        float32x4 c_frag;
-        float32x4 d_frag;
-        // load a
-        row = tid % 16;
-        col = tid / 16;
-        a_frag = a[row * K + col];
-        // load b
-        row = tid / 16;
-        col = tid % 16;
-        b_frag = b[row * N + col];
-        // load c
-        for (i = 0; i < 4; i++)
-        {
-            row = tid / 16 * 4 + i;
-            col = tid % 16;
-            c_frag[i] = c[row * N + col];
-        }
-        // mfma
+        uint32_t row, col, i, tid = threadIdx.x;
+        float a_frag, b_frag;
+        float32x4 c_frag, d_frag;
+
+        LOAD_A_M16K4();
+        LOAD_B_N16K4();
+        LOAD_C_M16N16();
         d_frag = __builtin_amdgcn_mfma_f32_16x16x4f32(a_frag, b_frag, c_frag, 0, 0, 0);
-        // store d
-        for (i = 0; i < 4; i++)
-        {
-            row = tid / 16 * 4 + i;
-            col = tid % 16;
-            d[row * N + col] = d_frag[i];
-        }
+        STORE_D_M16N16();
     }
 
     __global__ void mfma_f32_16x16x1f32_kernel(float *d, float *a, float *b, float *c)
     {
         const uint32_t N = 16, K = 1;
-        uint32_t tid = threadIdx.x;
-        uint32_t row, col, i;
-        float a_frag;
-        float b_frag;
-        float32x16 c_frag;
-        float32x16 d_frag;
-        // load a
-        row = tid % 16;
-        col = 0;
-        a_frag = a[row * K + col];
-        // load b
-        row = 0;
-        col = tid % 16;
-        b_frag = b[row * N + col];
-        // load c
-        for (i = 0; i < 16; i++)
-        {
-            row = tid / 16 * 4 + i % 4;
-            col = tid % 16;
-            c_frag[i] = c[row * N + col];
-        }
-        // mfma
+        uint32_t row, col, i, tid = threadIdx.x;
+        float a_frag, b_frag;
+        float32x16 c_frag, d_frag;
+
+        LOAD_A_M16K1_4B();
+        LOAD_B_N16K1_4B();
+        LOAD_C_M16N16_4B();
         d_frag = __builtin_amdgcn_mfma_f32_16x16x1f32(a_frag, b_frag, c_frag, 0, 0, 0);
-        // store d
-        for (i = 0; i < 16; i++)
-        {
-            row = tid / 16 * 4 + i % 4;
-            col = tid % 16;
-            d[row * N + col] = d_frag[i];
-        }
+        STORE_D_M16N16_4B();
     }
 
     __global__ void mfma_f32_4x4x1f32_kernel(float *d, float *a, float *b, float *c)
     {
         const uint32_t N = 4, K = 1;
-        uint32_t tid = threadIdx.x;
-        uint32_t row, col, i;
-        float a_frag;
-        float b_frag;
-        float32x4 c_frag;
-        float32x4 d_frag;
-        // load a
-        row = tid % 4;
-        col = 0;
-        a_frag = a[row * K + col];
-        // load b
-        row = 0;
-        col = tid % 4;
-        b_frag = b[row * N + col];
-        // load c
-        for (i = 0; i < 4; i++)
-        {
-            row = i;
-            col = tid % 4;
-            c_frag[i] = c[row * N + col];
-        }
-        // mfma
+        uint32_t row, col, i, tid = threadIdx.x;
+        float a_frag, b_frag;
+        float32x4 c_frag, d_frag;
+
+        LOAD_A_M4K1_16B();
+        LOAD_B_N4K1_16B();
+        LOAD_C_M4N4_16B();
         d_frag = __builtin_amdgcn_mfma_f32_4x4x1f32(a_frag, b_frag, c_frag, 0, 0, 0);
-        // store d
-        for (i = 0; i < 4; i++)
-        {
-            row = i;
-            col = tid % 32;
-            d[row * N + col] = d_frag[i];
-        }
+        STORE_D_M4N4_16B();
     }
 
     void mfma_f32_32x32x2f32(float *d, float *a, float *b, float *c)
@@ -214,206 +103,71 @@ extern "C" // fp16
     __global__ void mfma_f32_32x32x8f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
     {
         const uint32_t N = 32, K = 8;
-        uint32_t tid = threadIdx.x;
-        uint32_t row, col, i;
-        float16x4 a_frag;
-        float16x4 b_frag;
-        float32x16 c_frag;
-        float32x16 d_frag;
-        // load a
-        for (i = 0; i < 4; i++)
-        {
-            row = tid % 32;
-            col = tid / 32 * 4 + i;
-            a_frag[i] = a[row * K + col];
-        }
-        // load b
-        for (i = 0; i < 4; i++)
-        {
-            row = tid / 32 * 4 + i;
-            col = tid % 32;
-            b_frag[i] = b[row * N + col];
-        }
-        // load c
-        for (i = 0; i < 16; i++)
-        {
-            row = tid / 32 * 4 + i / 4 * 8 % 32 + i % 4;
-            col = tid % 32;
-            c_frag[i] = c[row * N + col];
-        }
-        // mfma
+        uint32_t row, col, i, tid = threadIdx.x;
+        float16x4 a_frag, b_frag;
+        float32x16 c_frag, d_frag;
+
+        LOAD_A_M32K8();
+        LOAD_B_N32K8();
+        LOAD_C_M32N32();
         d_frag = __builtin_amdgcn_mfma_f32_32x32x8f16(a_frag, b_frag, c_frag, 0, 0, 0);
-        // store d
-        for (i = 0; i < 16; i++)
-        {
-            row = tid / 32 * 4 + i / 4 * 8 % 32 + i % 4;
-            col = tid % 32;
-            d[row * N + col] = d_frag[i];
-        }
+        STORE_D_M32N32();
     }
 
     __global__ void mfma_f32_32x32x4f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
     {
         const uint32_t N = 32, K = 4;
-        uint32_t tid = threadIdx.x;
-        uint32_t row, col, i;
-        float16x4 a_frag;
-        float16x4 b_frag;
-        float32x32 c_frag;
-        float32x32 d_frag;
-        // load a
-        for (i = 0; i < 4; i++)
-        {
-            row = tid % 32;
-            col = i;
-            a_frag[i] = a[row * K + col];
-        }
-        // load b
-        for (i = 0; i < 4; i++)
-        {
-            row = i;
-            col = tid % 32;
-            b_frag[i] = b[row * N + col];
-        }
-        // load c
-        for (i = 0; i < 32; i++)
-        {
-            row = tid / 32 * 4 + i / 4 * 8 % 32 + i % 4;
-            col = tid % 32;
-            c_frag[i] = c[row * N + col];
-        }
-        // mfma
+        uint32_t row, col, i, tid = threadIdx.x;
+        float16x4 a_frag, b_frag;
+        float32x32 c_frag, d_frag;
+
+        LOAD_A_M32K4_2B();
+        LOAD_B_N32K4_2B();
+        LOAD_C_M32N32_2B();
         d_frag = __builtin_amdgcn_mfma_f32_32x32x4f16(a_frag, b_frag, c_frag, 0, 0, 0);
-        // store d
-        for (i = 0; i < 32; i++)
-        {
-            row = tid / 32 * 4 + i / 4 * 8 % 32 + i % 4;
-            col = tid % 32;
-            d[row * N + col] = d_frag[i];
-        }
+        STORE_D_M32N32_2B();
     }
 
     __global__ void mfma_f32_16x16x16f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
     {
         const uint32_t N = 16, K = 16;
-        uint32_t tid = threadIdx.x;
-        uint32_t row, col, i;
-        float16x4 a_frag;
-        float16x4 b_frag;
-        float32x4 c_frag;
-        float32x4 d_frag;
-        // load a
-        for (i = 0; i < 4; i++)
-        {
-            row = tid % 16;
-            col = tid / 16 * 4 + i;
-            a_frag[i] = a[row * K + col];
-        }
-        // load b
-        for (i = 0; i < 4; i++)
-        {
-            row = tid / 16 * 4 + i;
-            col = tid % 16;
-            b_frag[i] = b[row * N + col];
-        }
-        // load c
-        for (i = 0; i < 4; i++)
-        {
-            row = tid / 16 * 4 + i;
-            col = tid % 16;
-            c_frag[i] = c[row * N + col];
-        }
-        // mfma
+        uint32_t row, col, i, tid = threadIdx.x;
+        float16x4 a_frag, b_frag;
+        float32x4 c_frag, d_frag;
+
+        LOAD_A_M16K16();
+        LOAD_B_N16K16();
+        LOAD_C_M16N16();
         d_frag = __builtin_amdgcn_mfma_f32_16x16x16f16(a_frag, b_frag, c_frag, 0, 0, 0);
-        // store d
-        for (i = 0; i < 4; i++)
-        {
-            row = tid / 16 * 4 + i;
-            col = tid % 16;
-            d[row * N + col] = d_frag[i];
-        }
+        STORE_D_M16N16();
     }
 
     __global__ void mfma_f32_16x16x4f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
     {
         const uint32_t N = 16, K = 4;
-        uint32_t tid = threadIdx.x;
-        uint32_t row, col, i;
-        float16x4 a_frag;
-        float16x4 b_frag;
-        float32x16 c_frag;
-        float32x16 d_frag;
-        // load a
-        for (i = 0; i < 4; i++)
-        {
-            row = tid % 16;
-            col = i;
-            a_frag[i] = a[row * K + col];
-        }
-        // load b
-        for (i = 0; i < 4; i++)
-        {
-            row = i;
-            col = tid % 16;
-            b_frag[i] = b[row * N + col];
-        }
-        // load c
-        for (i = 0; i < 16; i++)
-        {
-            row = tid / 16 * 4 + i % 4;
-            col = tid % 16;
-            c_frag[i] = c[row * N + col];
-        }
-        // mfma
+        uint32_t row, col, i, tid = threadIdx.x;
+        float16x4 a_frag, b_frag;
+        float32x16 c_frag, d_frag;
+
+        LOAD_A_M16K4_4B();
+        LOAD_B_N16K4_4B();
+        LOAD_C_M16N16_4B();
         d_frag = __builtin_amdgcn_mfma_f32_16x16x4f16(a_frag, b_frag, c_frag, 0, 0, 0);
-        // store d
-        for (i = 0; i < 16; i++)
-        {
-            row = tid / 16 * 4 + i % 4;
-            col = tid % 16;
-            d[row * N + col] = d_frag[i];
-        }
+        STORE_D_M16N16_4B();
     }
 
     __global__ void mfma_f32_4x4x4f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
     {
         const uint32_t N = 4, K = 4;
-        uint32_t tid = threadIdx.x;
-        uint32_t row, col, i;
-        float16x4 a_frag;
-        float16x4 b_frag;
-        float32x4 c_frag;
-        float32x4 d_frag;
-        // load a
-        for (i = 0; i < 4; i++)
-        {
-            row = tid % 4;
-            col = i;
-            a_frag[i] = a[row * K + col];
-        }
-        // load b
-        for (i = 0; i < 4; i++)
-        {
-            row = i;
-            col = tid % 4;
-            b_frag[i] = b[row * N + col];
-        }
-        // load c
-        for (i = 0; i < 4; i++)
-        {
-            row = i;
-            col = tid % 4;
-            c_frag[i] = c[row * N + col];
-        }
-        // mfma
+        uint32_t row, col, i, tid = threadIdx.x;
+        float16x4 a_frag, b_frag;
+        float32x4 c_frag, d_frag;
+
+        LOAD_A_M4K4_16B();
+        LOAD_B_N4K4_16B();
+        LOAD_C_M4N4_16B();
         d_frag = __builtin_amdgcn_mfma_f32_4x4x4f16(a_frag, b_frag, c_frag, 0, 0, 0);
-        // store d
-        for (i = 0; i < 4; i++)
-        {
-            row = i;
-            col = tid % 4;
-            d[row * N + col] = d_frag[i];
-        }
+        STORE_D_M4N4_16B();
     }
 
     void mfma_f32_32x32x8f16(float *d, _Float16 *a, _Float16 *b, float *c)
@@ -447,206 +201,71 @@ extern "C" // bf16
     __global__ void mfma_f32_32x32x4bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
     {
         const uint32_t N = 32, K = 4;
-        uint32_t tid = threadIdx.x;
-        uint32_t row, col, i;
-        bfloat16x2 a_frag;
-        bfloat16x2 b_frag;
-        float32x16 c_frag;
-        float32x16 d_frag;
-        // load a
-        for (i = 0; i < 2; i++)
-        {
-            row = tid % 32;
-            col = tid / 32 * 2 + i;
-            a_frag[i] = a[row * K + col];
-        }
-        // load b
-        for (i = 0; i < 2; i++)
-        {
-            row = tid / 32 * 2 + i;
-            col = tid % 32;
-            b_frag[i] = b[row * N + col];
-        }
-        // load c
-        for (i = 0; i < 16; i++)
-        {
-            row = tid / 32 * 4 + i / 4 * 8 + i % 4;
-            col = tid % 32;
-            c_frag[i] = c[row * N + col];
-        }
-        // mfma
+        uint32_t row, col, i, tid = threadIdx.x;
+        bfloat16x2 a_frag, b_frag;
+        float32x16 c_frag, d_frag;
+
+        LOAD_A_M32K4();
+        LOAD_B_N32K4();
+        LOAD_C_M32N32();
         d_frag = __builtin_amdgcn_mfma_f32_32x32x4bf16(a_frag, b_frag, c_frag, 0, 0, 0);
-        // store d
-        for (i = 0; i < 16; i++)
-        {
-            row = tid / 32 * 4 + i / 4 * 8 + i % 4;
-            col = tid % 32;
-            d[row * N + col] = d_frag[i];
-        }
+        STORE_D_M32N32();
     }
 
     __global__ void mfma_f32_32x32x2bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
     {
         const uint32_t N = 32, K = 2;
-        uint32_t tid = threadIdx.x;
-        uint32_t row, col, i;
-        bfloat16x2 a_frag;
-        bfloat16x2 b_frag;
-        float32x32 c_frag;
-        float32x32 d_frag;
-        // load a
-        for (i = 0; i < 2; i++)
-        {
-            row = tid % 32;
-            col = i;
-            a_frag[i] = a[row * K + col];
-        }
-        // load b
-        for (i = 0; i < 2; i++)
-        {
-            row = i;
-            col = tid % 32;
-            b_frag[i] = b[row * N + col];
-        }
-        // load c
-        for (i = 0; i < 32; i++)
-        {
-            row = tid / 32 * 4 + i / 4 * 8 % 32 + i % 4;
-            col = tid % 32;
-            c_frag[i] = c[row * N + col];
-        }
-        // mfma
+        uint32_t row, col, i, tid = threadIdx.x;
+        bfloat16x2 a_frag, b_frag;
+        float32x32 c_frag, d_frag;
+
+        LOAD_A_M32K2_2B();
+        LOAD_B_N32K2_2B();
+        LOAD_C_M32N32_2B();
         d_frag = __builtin_amdgcn_mfma_f32_32x32x2bf16(a_frag, b_frag, c_frag, 0, 0, 0);
-        // store d
-        for (i = 0; i < 32; i++)
-        {
-            row = tid / 32 * 4 + i / 4 * 8 % 32 + i % 4;
-            col = tid % 32;
-            d[row * N + col] = d_frag[i];
-        }
+        STORE_D_M32N32_2B();
     }
 
     __global__ void mfma_f32_16x16x8bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
     {
         const uint32_t N = 16, K = 8;
-        uint32_t tid = threadIdx.x;
-        uint32_t row, col, i;
-        bfloat16x2 a_frag;
-        bfloat16x2 b_frag;
-        float32x4 c_frag;
-        float32x4 d_frag;
-        // load a
-        for (i = 0; i < 2; i++)
-        {
-            row = tid % 16;
-            col = tid / 16 * 2 + i;
-            a_frag[i] = a[row * K + col];
-        }
-        // load b
-        for (i = 0; i < 2; i++)
-        {
-            row = tid / 16 * 2 + i;
-            col = tid % 16;
-            b_frag[i] = b[row * N + col];
-        }
-        // load c
-        for (i = 0; i < 4; i++)
-        {
-            row = tid / 16 * 4 + i;
-            col = tid % 16;
-            c_frag[i] = c[row * N + col];
-        }
-        // mfma
+        uint32_t row, col, i, tid = threadIdx.x;
+        bfloat16x2 a_frag, b_frag;
+        float32x4 c_frag, d_frag;
+
+        LOAD_A_M16K8();
+        LOAD_B_N16K8();
+        LOAD_C_M16N16();
         d_frag = __builtin_amdgcn_mfma_f32_16x16x8bf16(a_frag, b_frag, c_frag, 0, 0, 0);
-        // store d
-        for (i = 0; i < 4; i++)
-        {
-            row = tid / 16 * 4 + i;
-            col = tid % 16;
-            d[row * N + col] = d_frag[i];
-        }
+        STORE_D_M16N16();
     }
 
     __global__ void mfma_f32_16x16x2bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
     {
         const uint32_t N = 16, K = 2;
-        uint32_t tid = threadIdx.x;
-        uint32_t row, col, i;
-        bfloat16x2 a_frag;
-        bfloat16x2 b_frag;
-        float32x16 c_frag;
-        float32x16 d_frag;
-        // load a
-        for (i = 0; i < 2; i++)
-        {
-            row = tid % 16;
-            col = i;
-            a_frag[i] = a[row * K + col];
-        }
-        // load b
-        for (i = 0; i < 2; i++)
-        {
-            row = i;
-            col = tid % 16;
-            b_frag[i] = b[row * N + col];
-        }
-        // load c
-        for (i = 0; i < 16; i++)
-        {
-            row = tid / 16 * 4 + i % 4;
-            col = tid % 16;
-            c_frag[i] = c[row * N + col];
-        }
-        // mfma
+        uint32_t row, col, i, tid = threadIdx.x;
+        bfloat16x2 a_frag, b_frag;
+        float32x16 c_frag, d_frag;
+
+        LOAD_A_M16K2_4B();
+        LOAD_B_N16K2_4B();
+        LOAD_C_M16N16_4B();
         d_frag = __builtin_amdgcn_mfma_f32_16x16x2bf16(a_frag, b_frag, c_frag, 0, 0, 0);
-        // store d
-        for (i = 0; i < 16; i++)
-        {
-            row = tid / 16 * 4 + i % 4;
-            col = tid % 16;
-            d[row * N + col] = d_frag[i];
-        }
+        STORE_D_M16N16_4B();
     }
 
     __global__ void mfma_f32_4x4x2bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
     {
         const uint32_t N = 4, K = 2;
-        uint32_t tid = threadIdx.x;
-        uint32_t row, col, i;
-        bfloat16x2 a_frag;
-        bfloat16x2 b_frag;
-        float32x4 c_frag;
-        float32x4 d_frag;
-        // load a
-        for (i = 0; i < 2; i++)
-        {
-            row = tid % 4;
-            col = i;
-            a_frag[i] = a[row * K + col];
-        }
-        // load b
-        for (i = 0; i < 2; i++)
-        {
-            row = i;
-            col = tid % 4;
-            b_frag[i] = b[row * N + col];
-        }
-        // load c
-        for (i = 0; i < 4; i++)
-        {
-            row = i;
-            col = tid % 4;
-            c_frag[i] = c[row * N + col];
-        }
-        // mfma
+        uint32_t row, col, i, tid = threadIdx.x;
+        bfloat16x2 a_frag, b_frag;
+        float32x4 c_frag, d_frag;
+
+        LOAD_A_M4K2_16B();
+        LOAD_B_N4K2_16B();
+        LOAD_C_M4N4_16B();
         d_frag = __builtin_amdgcn_mfma_f32_4x4x2bf16(a_frag, b_frag, c_frag, 0, 0, 0);
-        // store d
-        for (i = 0; i < 4; i++)
-        {
-            row = i;
-            col = tid % 4;
-            d[row * N + col] = d_frag[i];
-        }
+        STORE_D_M4N4_16B();
     }
 
     void mfma_f32_32x32x4bf16(float *d, int16_t *a, int16_t *b, float *c)

@@ -6,16 +6,16 @@ from ..isa import NV_MMABase, NV_WGMMABase, NV_TCGen05MMABase
 
 volta_mma_qualifiers = [
     # sm_70 f16
-    "m8n8k4.f16.f16.f16.f16",
     "m8n8k4.f32.f16.f16.f16",
     "m8n8k4.f32.f16.f16.f32",
+    "m8n8k4.f16.f16.f16.f16",
 ]
 turing_mma_qualifiers = [
     # sm_75 f16
-    "m16n8k8.f16.f16.f16.f16",
     "m16n8k8.f32.f16.f16.f32",
+    "m16n8k8.f16.f16.f16.f16",
 ]
-ampere_mma_qualifiers = turing_mma_qualifiers + [
+ampere_mma_qualifiers = [
     # sm_80 tf32
     "m16n8k4.f32.tf32.tf32.f32",
     "m16n8k8.f32.tf32.tf32.f32",
@@ -26,7 +26,7 @@ ampere_mma_qualifiers = turing_mma_qualifiers + [
     "m16n8k8.f32.bf16.bf16.f32",
     "m16n8k16.f32.bf16.bf16.f32",
 ]
-adalovelace_mma_qualifiers = ampere_mma_qualifiers + [
+adalovelace_mma_qualifiers = [
     # sm_89 fp8 m16n8k32 f32_output
     "m16n8k32.f32.e5m2.e5m2.f32",
     "m16n8k32.f32.e5m2.e4m3.f32",
@@ -48,25 +48,22 @@ adalovelace_mma_qualifiers = ampere_mma_qualifiers + [
     "m16n8k16.f16.e4m3.e5m2.f16",
     "m16n8k16.f16.e4m3.e4m3.f16",
 ]
-hopper_mma_qualifiers = ampere_mma_qualifiers
-blackwell_mma_qualifiers = ampere_mma_qualifiers
-rtxblackwell_mma_qualifiers = adalovelace_mma_qualifiers
 
 hopper_wgmma_qualifiers = (
     # sm_90a tf32
     [f"m64n{N}k8.f32.tf32.tf32" for N in range(8, 256 + 1, 8)]
     # sm_90a f16
-    + [f"m64n{N}k16.f16.f16.f16" for N in range(8, 256 + 1, 8)]
     + [f"m64n{N}k16.f32.f16.f16" for N in range(8, 256 + 1, 8)]
+    + [f"m64n{N}k16.f16.f16.f16" for N in range(8, 256 + 1, 8)]
     # sm_90a bf16
     + [f"m64n{N}k16.f32.bf16.bf16" for N in range(8, 256 + 1, 8)]
     # sm_90a fp8
     + [
         f"m64n{N}k32.{dtype}.{atype}.{btype}"
         for N in range(8, 256 + 1, 8)
-        for dtype in ["f32", "f16"]
         for atype in ["e5m2", "e4m3"]
         for btype in ["e5m2", "e4m3"]
+        for dtype in ["f32", "f16"]
     ]
 )
 
@@ -87,26 +84,33 @@ blackwell_tcgen05mma_qualifiers = (
         f"m{M}n{N}k32.{dtype}.{atype}.{btype}"
         for M in {64, 128}
         for N in range(8, 256 + 1, 8)
-        for dtype in ["f32", "f16"]
         for atype in ["e5m2", "e4m3"]
         for btype in ["e5m2", "e4m3"]
+        for dtype in ["f32", "f16"]
     ]
 )
 
 arch_mma_qualifiers = {
     "Volta": volta_mma_qualifiers,
     "Turing": turing_mma_qualifiers,
-    "Ampere": ampere_mma_qualifiers,
-    "Ada Lovelace": adalovelace_mma_qualifiers,
-    "Hopper": hopper_mma_qualifiers,
-    "Blackwell": blackwell_mma_qualifiers,
-    "RTX Blackwell": rtxblackwell_mma_qualifiers,
+    "Ampere": ampere_mma_qualifiers + turing_mma_qualifiers,
+    "Ada Lovelace": adalovelace_mma_qualifiers
+    + ampere_mma_qualifiers
+    + turing_mma_qualifiers,
+    "Hopper": ampere_mma_qualifiers + turing_mma_qualifiers,
+    "Blackwell": ampere_mma_qualifiers + turing_mma_qualifiers,
+    "RTX Blackwell": adalovelace_mma_qualifiers
+    + ampere_mma_qualifiers
+    + turing_mma_qualifiers,
 }
 
 arch_wgmma_qualifiers = {
     "Hopper": hopper_wgmma_qualifiers,
 }
 
+arch_tcgen05mma_qualifiers = {
+    "Blackwell": blackwell_tcgen05mma_qualifiers,
+}
 
 arch_accum_fraction_bits = {
     "Volta": 23,
@@ -136,6 +140,7 @@ class MMA(NV_MMABase):
 
         self.n_accum_fraction_bits = arch_accum_fraction_bits[arch]
         self.output_type = "f32" if self.d_type == torch.float32 else "f16"
+
         if self.arch == "Ada Lovelace" and self.a_type in [
             torch.float8_e5m2,
             torch.float8_e4m3fn,
@@ -143,6 +148,7 @@ class MMA(NV_MMABase):
             self.n_accum_fraction_bits = 13
             if self.output_type == "f32":
                 self.output_type = "f32_e8m13"
+
         self.is_split_k = self.arch in [
             "Ampere",
             "Ada Lovelace",
@@ -150,8 +156,8 @@ class MMA(NV_MMABase):
             # tf32 k8
             "m16n8k8.f32.tf32.tf32.f32",
             # f16 k16
-            "m16n8k16.f16.f16.f16.f16",
             "m16n8k16.f32.f16.f16.f32",
+            "m16n8k16.f16.f16.f16.f16",
             # bf16 k16
             "m16n8k16.f32.bf16.bf16.f32",
             # fp8 k32
@@ -229,6 +235,7 @@ class WGMMA(NV_WGMMABase):
 
         self.n_accum_fraction_bits = arch_accum_fraction_bits[arch]
         self.output_type = "f32" if self.d_type == torch.float32 else "f16"
+
         if self.a_type in [
             torch.float8_e5m2,
             torch.float8_e4m3fn,
@@ -270,12 +277,12 @@ class WGMMA(NV_WGMMABase):
 
 class TCGen05MMA(NV_TCGen05MMABase):
     def __init__(self, arch: str, qualifier: str):
-        assert arch in arch_wgmma_qualifiers.keys(), (
+        assert arch in arch_tcgen05mma_qualifiers.keys(), (
             f"Unsupported architecture {arch} for TCGen05MMA.\n"
-            f"Supported architectures: {list(arch_wgmma_qualifiers.keys())}"
+            f"Supported architectures: {list(arch_tcgen05mma_qualifiers.keys())}"
         )
         self.arch = arch
-        supported_qualifiers = arch_wgmma_qualifiers[arch]
+        supported_qualifiers = arch_tcgen05mma_qualifiers[arch]
         assert qualifier in supported_qualifiers, (
             f"Unsupported TCGen05MMA qualifier {qualifier} for {arch} architecture.\n"
             f"Supported qualifiers: {supported_qualifiers}"

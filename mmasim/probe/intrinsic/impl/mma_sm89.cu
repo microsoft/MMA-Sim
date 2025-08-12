@@ -1,4 +1,4 @@
-#include <stdint.h>
+#include "mma.h"
 
 extern "C" // fp8 m16n8k32 f32_output
 {
@@ -6,36 +6,13 @@ extern "C" // fp8 m16n8k32 f32_output
         float *d, uint8_t *a, uint8_t *b, float *c)
     {
         const uint32_t N = 8, K = 32;
-        uint32_t row, col, i;
-        uint32_t laneid = threadIdx.x % 32;
-        uint32_t groupid = laneid >> 2;
-        uint32_t threadID_in_group = laneid % 4;
-        float d_frag[4];
-        uint32_t a_frag[4];
-        uint32_t b_frag[2];
-        float c_frag[4];
-        // load a
-        for (i = 0; i < 16; i += 4)
-        {
-            row = (i % 8 < 4) ? groupid : groupid + 8;
-            col = (i < 8) ? ((threadID_in_group * 4) + (i & 0x3)) : ((threadID_in_group * 4) + (i & 0x3) + 16);
-            a_frag[i / 4] = *(uint32_t *)(a + row * K + col);
-        }
-        // load b
-        for (i = 0; i < 8; i += 4)
-        {
-            row = (i < 4) ? ((threadID_in_group * 4) + (i & 0x3)) : ((threadID_in_group * 4) + (i & 0x3) + 16);
-            col = groupid;
-            b_frag[i / 4] = *(uint32_t *)(b + col * K + row);
-        }
-        // load c
-        for (i = 0; i < 4; i++)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            c_frag[i] = c[row* N + col];
-        }
-        // mma
+        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t a_frag[4], b_frag[2];
+        float c_frag[4], d_frag[4];
+
+        LOAD_A_M16K32_FP8();
+        LOAD_B_N8K32_FP8();
+        LOAD_C_M16N8_F32();
         asm volatile(
             "mma.sync.aligned.m16n8k32.row.col.f32.e5m2.e5m2.f32 "
             "{%0, %1, %2, %3}, "
@@ -46,49 +23,20 @@ extern "C" // fp8 m16n8k32 f32_output
             : "r"(a_frag[0]), "r"(a_frag[1]), "r"(a_frag[2]), "r"(a_frag[3]),
               "r"(b_frag[0]), "r"(b_frag[1]),
               "f"(c_frag[0]), "f"(c_frag[1]), "f"(c_frag[2]), "f"(c_frag[3]));
-        // store d
-        for (i = 0; i < 4; i++)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            d[row* N + col] = d_frag[i];
-        }
+        STORE_D_M16N8_F32();
     }
 
     __global__ void mma_m16n8k32_f32_e5m2_e4m3_f32_kernel(
         float *d, uint8_t *a, uint8_t *b, float *c)
     {
         const uint32_t N = 8, K = 32;
-        uint32_t row, col, i;
-        uint32_t laneid = threadIdx.x % 32;
-        uint32_t groupid = laneid >> 2;
-        uint32_t threadID_in_group = laneid % 4;
-        float d_frag[4];
-        uint32_t a_frag[4];
-        uint32_t b_frag[2];
-        float c_frag[4];
-        // load a
-        for (i = 0; i < 16; i += 4)
-        {
-            row = (i % 8 < 4) ? groupid : groupid + 8;
-            col = (i < 8) ? ((threadID_in_group * 4) + (i & 0x3)) : ((threadID_in_group * 4) + (i & 0x3) + 16);
-            a_frag[i / 4] = *(uint32_t *)(a + row * K + col);
-        }
-        // load b
-        for (i = 0; i < 8; i += 4)
-        {
-            row = (i < 4) ? ((threadID_in_group * 4) + (i & 0x3)) : ((threadID_in_group * 4) + (i & 0x3) + 16);
-            col = groupid;
-            b_frag[i / 4] = *(uint32_t *)(b + col * K + row);
-        }
-        // load c
-        for (i = 0; i < 4; i++)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            c_frag[i] = c[row* N + col];
-        }
-        // mma
+        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t a_frag[4], b_frag[2];
+        float c_frag[4], d_frag[4];
+
+        LOAD_A_M16K32_FP8();
+        LOAD_B_N8K32_FP8();
+        LOAD_C_M16N8_F32();
         asm volatile(
             "mma.sync.aligned.m16n8k32.row.col.f32.e5m2.e4m3.f32 "
             "{%0, %1, %2, %3}, "
@@ -99,49 +47,20 @@ extern "C" // fp8 m16n8k32 f32_output
             : "r"(a_frag[0]), "r"(a_frag[1]), "r"(a_frag[2]), "r"(a_frag[3]),
               "r"(b_frag[0]), "r"(b_frag[1]),
               "f"(c_frag[0]), "f"(c_frag[1]), "f"(c_frag[2]), "f"(c_frag[3]));
-        // store d
-        for (i = 0; i < 4; i++)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            d[row* N + col] = d_frag[i];
-        }
+        STORE_D_M16N8_F32();
     }
 
     __global__ void mma_m16n8k32_f32_e4m3_e5m2_f32_kernel(
         float *d, uint8_t *a, uint8_t *b, float *c)
     {
         const uint32_t N = 8, K = 32;
-        uint32_t row, col, i;
-        uint32_t laneid = threadIdx.x % 32;
-        uint32_t groupid = laneid >> 2;
-        uint32_t threadID_in_group = laneid % 4;
-        float d_frag[4];
-        uint32_t a_frag[4];
-        uint32_t b_frag[2];
-        float c_frag[4];
-        // load a
-        for (i = 0; i < 16; i += 4)
-        {
-            row = (i % 8 < 4) ? groupid : groupid + 8;
-            col = (i < 8) ? ((threadID_in_group * 4) + (i & 0x3)) : ((threadID_in_group * 4) + (i & 0x3) + 16);
-            a_frag[i / 4] = *(uint32_t *)(a + row * K + col);
-        }
-        // load b
-        for (i = 0; i < 8; i += 4)
-        {
-            row = (i < 4) ? ((threadID_in_group * 4) + (i & 0x3)) : ((threadID_in_group * 4) + (i & 0x3) + 16);
-            col = groupid;
-            b_frag[i / 4] = *(uint32_t *)(b + col * K + row);
-        }
-        // load c
-        for (i = 0; i < 4; i++)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            c_frag[i] = c[row* N + col];
-        }
-        // mma
+        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t a_frag[4], b_frag[2];
+        float c_frag[4], d_frag[4];
+
+        LOAD_A_M16K32_FP8();
+        LOAD_B_N8K32_FP8();
+        LOAD_C_M16N8_F32();
         asm volatile(
             "mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e5m2.f32 "
             "{%0, %1, %2, %3}, "
@@ -152,49 +71,20 @@ extern "C" // fp8 m16n8k32 f32_output
             : "r"(a_frag[0]), "r"(a_frag[1]), "r"(a_frag[2]), "r"(a_frag[3]),
               "r"(b_frag[0]), "r"(b_frag[1]),
               "f"(c_frag[0]), "f"(c_frag[1]), "f"(c_frag[2]), "f"(c_frag[3]));
-        // store d
-        for (i = 0; i < 4; i++)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            d[row* N + col] = d_frag[i];
-        }
+        STORE_D_M16N8_F32();
     }
 
     __global__ void mma_m16n8k32_f32_e4m3_e4m3_f32_kernel(
         float *d, uint8_t *a, uint8_t *b, float *c)
     {
         const uint32_t N = 8, K = 32;
-        uint32_t row, col, i;
-        uint32_t laneid = threadIdx.x % 32;
-        uint32_t groupid = laneid >> 2;
-        uint32_t threadID_in_group = laneid % 4;
-        float d_frag[4];
-        uint32_t a_frag[4];
-        uint32_t b_frag[2];
-        float c_frag[4];
-        // load a
-        for (i = 0; i < 16; i += 4)
-        {
-            row = (i % 8 < 4) ? groupid : groupid + 8;
-            col = (i < 8) ? ((threadID_in_group * 4) + (i & 0x3)) : ((threadID_in_group * 4) + (i & 0x3) + 16);
-            a_frag[i / 4] = *(uint32_t *)(a + row * K + col);
-        }
-        // load b
-        for (i = 0; i < 8; i += 4)
-        {
-            row = (i < 4) ? ((threadID_in_group * 4) + (i & 0x3)) : ((threadID_in_group * 4) + (i & 0x3) + 16);
-            col = groupid;
-            b_frag[i / 4] = *(uint32_t *)(b + col * K + row);
-        }
-        // load c
-        for (i = 0; i < 4; i++)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            c_frag[i] = c[row* N + col];
-        }
-        // mma
+        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t a_frag[4], b_frag[2];
+        float c_frag[4], d_frag[4];
+
+        LOAD_A_M16K32_FP8();
+        LOAD_B_N8K32_FP8();
+        LOAD_C_M16N8_F32();
         asm volatile(
             "mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 "
             "{%0, %1, %2, %3}, "
@@ -205,13 +95,7 @@ extern "C" // fp8 m16n8k32 f32_output
             : "r"(a_frag[0]), "r"(a_frag[1]), "r"(a_frag[2]), "r"(a_frag[3]),
               "r"(b_frag[0]), "r"(b_frag[1]),
               "f"(c_frag[0]), "f"(c_frag[1]), "f"(c_frag[2]), "f"(c_frag[3]));
-        // store d
-        for (i = 0; i < 4; i++)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            d[row* N + col] = d_frag[i];
-        }
+        STORE_D_M16N8_F32();
     }
 
     void mma_m16n8k32_f32_e5m2_e5m2_f32(
@@ -239,46 +123,19 @@ extern "C" // fp8 m16n8k32 f32_output
     }
 }
 
-#if __CUDACC_VER_MAJOR__ < 12 || (__CUDACC_VER_MAJOR__ == 12 && __CUDACC_VER_MINOR__ < 8)
-#error "PTX 8.7 instructions require CUDA 12.8 or later."
-#endif
-
 extern "C" // fp8 m16n8k16 f32_output
 {
     __global__ void mma_m16n8k16_f32_e5m2_e5m2_f32_kernel(
         float *d, uint8_t *a, uint8_t *b, float *c)
     {
-        const uint32_t N = 8, K = 16;
-        uint32_t row, col, i;
-        uint32_t laneid = threadIdx.x % 32;
-        uint32_t groupid = laneid >> 2;
-        uint32_t threadID_in_group = laneid % 4;
-        float d_frag[4];
-        uint32_t a_frag[2];
-        uint32_t b_frag[1];
-        float c_frag[4];
-        // load a
-        for (i = 0; i < 8; i += 4)
-        {
-            row = (i < 4) ? groupid : groupid + 8;
-            col = (threadID_in_group * 4) + (i & 0x3);
-            a_frag[i / 4] = *(uint32_t *)(a + row * K + col);
-        }
-        // load b
-        for (i = 0; i < 4; i += 4)
-        {
-            row = (threadID_in_group * 4) + i;
-            col = groupid;
-            b_frag[i / 4] = *(uint32_t *)(b + col * K + row);
-        }
-        // load c
-        for (i = 0; i < 4; i++)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            c_frag[i] = c[row* N + col];
-        }
-        // mma
+        const uint32_t N = 8, K = 32;
+        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t a_frag[2], b_frag[1];
+        float c_frag[4], d_frag[4];
+
+        LOAD_A_M16K16_FP8();
+        LOAD_B_N8K16_FP8();
+        LOAD_C_M16N8_F32();
         asm volatile(
             "mma.sync.aligned.m16n8k16.row.col.f32.e5m2.e5m2.f32 "
             "{%0, %1, %2, %3}, "
@@ -289,49 +146,20 @@ extern "C" // fp8 m16n8k16 f32_output
             : "r"(a_frag[0]), "r"(a_frag[1]),
               "r"(b_frag[0]),
               "f"(c_frag[0]), "f"(c_frag[1]), "f"(c_frag[2]), "f"(c_frag[3]));
-        // store d
-        for (i = 0; i < 4; i++)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            d[row* N + col] = d_frag[i];
-        }
+        STORE_D_M16N8_F32();
     }
 
     __global__ void mma_m16n8k16_f32_e5m2_e4m3_f32_kernel(
         float *d, uint8_t *a, uint8_t *b, float *c)
     {
-        const uint32_t N = 8, K = 16;
-        uint32_t row, col, i;
-        uint32_t laneid = threadIdx.x % 32;
-        uint32_t groupid = laneid >> 2;
-        uint32_t threadID_in_group = laneid % 4;
-        float d_frag[4];
-        uint32_t a_frag[2];
-        uint32_t b_frag[1];
-        float c_frag[4];
-        // load a
-        for (i = 0; i < 8; i += 4)
-        {
-            row = (i < 4) ? groupid : groupid + 8;
-            col = (threadID_in_group * 4) + (i & 0x3);
-            a_frag[i / 4] = *(uint32_t *)(a + row * K + col);
-        }
-        // load b
-        for (i = 0; i < 4; i += 4)
-        {
-            row = (threadID_in_group * 4) + i;
-            col = groupid;
-            b_frag[i / 4] = *(uint32_t *)(b + col * K + row);
-        }
-        // load c
-        for (i = 0; i < 4; i++)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            c_frag[i] = c[row* N + col];
-        }
-        // mma
+        const uint32_t N = 8, K = 32;
+        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t a_frag[2], b_frag[1];
+        float c_frag[4], d_frag[4];
+
+        LOAD_A_M16K16_FP8();
+        LOAD_B_N8K16_FP8();
+        LOAD_C_M16N8_F32();
         asm volatile(
             "mma.sync.aligned.m16n8k16.row.col.f32.e5m2.e4m3.f32 "
             "{%0, %1, %2, %3}, "
@@ -342,49 +170,20 @@ extern "C" // fp8 m16n8k16 f32_output
             : "r"(a_frag[0]), "r"(a_frag[1]),
               "r"(b_frag[0]),
               "f"(c_frag[0]), "f"(c_frag[1]), "f"(c_frag[2]), "f"(c_frag[3]));
-        // store d
-        for (i = 0; i < 4; i++)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            d[row* N + col] = d_frag[i];
-        }
+        STORE_D_M16N8_F32();
     }
 
     __global__ void mma_m16n8k16_f32_e4m3_e5m2_f32_kernel(
         float *d, uint8_t *a, uint8_t *b, float *c)
     {
-        const uint32_t N = 8, K = 16;
-        uint32_t row, col, i;
-        uint32_t laneid = threadIdx.x % 32;
-        uint32_t groupid = laneid >> 2;
-        uint32_t threadID_in_group = laneid % 4;
-        float d_frag[4];
-        uint32_t a_frag[2];
-        uint32_t b_frag[1];
-        float c_frag[4];
-        // load a
-        for (i = 0; i < 8; i += 4)
-        {
-            row = (i < 4) ? groupid : groupid + 8;
-            col = (threadID_in_group * 4) + (i & 0x3);
-            a_frag[i / 4] = *(uint32_t *)(a + row * K + col);
-        }
-        // load b
-        for (i = 0; i < 4; i += 4)
-        {
-            row = (threadID_in_group * 4) + i;
-            col = groupid;
-            b_frag[i / 4] = *(uint32_t *)(b + col * K + row);
-        }
-        // load c
-        for (i = 0; i < 4; i++)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            c_frag[i] = c[row* N + col];
-        }
-        // mma
+        const uint32_t N = 8, K = 32;
+        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t a_frag[2], b_frag[1];
+        float c_frag[4], d_frag[4];
+
+        LOAD_A_M16K16_FP8();
+        LOAD_B_N8K16_FP8();
+        LOAD_C_M16N8_F32();
         asm volatile(
             "mma.sync.aligned.m16n8k16.row.col.f32.e4m3.e5m2.f32 "
             "{%0, %1, %2, %3}, "
@@ -395,49 +194,20 @@ extern "C" // fp8 m16n8k16 f32_output
             : "r"(a_frag[0]), "r"(a_frag[1]),
               "r"(b_frag[0]),
               "f"(c_frag[0]), "f"(c_frag[1]), "f"(c_frag[2]), "f"(c_frag[3]));
-        // store d
-        for (i = 0; i < 4; i++)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            d[row* N + col] = d_frag[i];
-        }
+        STORE_D_M16N8_F32();
     }
 
     __global__ void mma_m16n8k16_f32_e4m3_e4m3_f32_kernel(
         float *d, uint8_t *a, uint8_t *b, float *c)
     {
-        const uint32_t N = 8, K = 16;
-        uint32_t row, col, i;
-        uint32_t laneid = threadIdx.x % 32;
-        uint32_t groupid = laneid >> 2;
-        uint32_t threadID_in_group = laneid % 4;
-        float d_frag[4];
-        uint32_t a_frag[2];
-        uint32_t b_frag[1];
-        float c_frag[4];
-        // load a
-        for (i = 0; i < 8; i += 4)
-        {
-            row = (i < 4) ? groupid : groupid + 8;
-            col = (threadID_in_group * 4) + (i & 0x3);
-            a_frag[i / 4] = *(uint32_t *)(a + row * K + col);
-        }
-        // load b
-        for (i = 0; i < 4; i += 4)
-        {
-            row = (threadID_in_group * 4) + i;
-            col = groupid;
-            b_frag[i / 4] = *(uint32_t *)(b + col * K + row);
-        }
-        // load c
-        for (i = 0; i < 4; i++)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            c_frag[i] = c[row* N + col];
-        }
-        // mma
+        const uint32_t N = 8, K = 32;
+        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t a_frag[2], b_frag[1];
+        float c_frag[4], d_frag[4];
+
+        LOAD_A_M16K16_FP8();
+        LOAD_B_N8K16_FP8();
+        LOAD_C_M16N8_F32();
         asm volatile(
             "mma.sync.aligned.m16n8k16.row.col.f32.e4m3.e4m3.f32 "
             "{%0, %1, %2, %3}, "
@@ -448,13 +218,7 @@ extern "C" // fp8 m16n8k16 f32_output
             : "r"(a_frag[0]), "r"(a_frag[1]),
               "r"(b_frag[0]),
               "f"(c_frag[0]), "f"(c_frag[1]), "f"(c_frag[2]), "f"(c_frag[3]));
-        // store d
-        for (i = 0; i < 4; i++)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            d[row* N + col] = d_frag[i];
-        }
+        STORE_D_M16N8_F32();
     }
 
     void mma_m16n8k16_f32_e5m2_e5m2_f32(
@@ -488,36 +252,13 @@ extern "C" // fp8 m16n8k32 f16_output
         uint16_t *d, uint8_t *a, uint8_t *b, uint16_t *c)
     {
         const uint32_t N = 8, K = 32;
-        uint32_t row, col, i;
-        uint32_t laneid = threadIdx.x % 32;
-        uint32_t groupid = laneid >> 2;
-        uint32_t threadID_in_group = laneid % 4;
-        uint32_t d_frag[2];
-        uint32_t a_frag[4];
-        uint32_t b_frag[2];
-        uint32_t c_frag[2];
-        // load a
-        for (i = 0; i < 16; i += 4)
-        {
-            row = (i % 8 < 4) ? groupid : groupid + 8;
-            col = (i < 8) ? ((threadID_in_group * 4) + (i & 0x3)) : ((threadID_in_group * 4) + (i & 0x3) + 16);
-            a_frag[i / 4] = *(uint32_t *)(a + row * K + col);
-        }
-        // load b
-        for (i = 0; i < 8; i += 4)
-        {
-            row = (i < 4) ? ((threadID_in_group * 4) + (i & 0x3)) : ((threadID_in_group * 4) + (i & 0x3) + 16);
-            col = groupid;
-            b_frag[i / 4] = *(uint32_t *)(b + col * K + row);
-        }
-        // load c
-        for (i = 0; i < 4; i += 2)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            c_frag[i / 2] = *(uint32_t *)(c + row * N + col);
-        }
-        // mma
+        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t a_frag[4], b_frag[2];
+        uint32_t c_frag[2], d_frag[2];
+
+        LOAD_A_M16K32_FP8();
+        LOAD_B_N8K32_FP8();
+        LOAD_C_M16N8_F16();
         asm volatile(
             "mma.sync.aligned.m16n8k32.row.col.f16.e5m2.e5m2.f16 "
             "{%0, %1}, "
@@ -528,49 +269,20 @@ extern "C" // fp8 m16n8k32 f16_output
             : "r"(a_frag[0]), "r"(a_frag[1]), "r"(a_frag[2]), "r"(a_frag[3]),
               "r"(b_frag[0]), "r"(b_frag[1]),
               "r"(c_frag[0]), "r"(c_frag[1]));
-        // store d
-        for (i = 0; i < 4; i += 2)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            *(uint32_t *)(d + row * N + col) = d_frag[i / 2];
-        }
+        STORE_D_M16N8_F16();
     }
 
     __global__ void mma_m16n8k32_f16_e5m2_e4m3_f16_kernel(
         uint16_t *d, uint8_t *a, uint8_t *b, uint16_t *c)
     {
         const uint32_t N = 8, K = 32;
-        uint32_t row, col, i;
-        uint32_t laneid = threadIdx.x % 32;
-        uint32_t groupid = laneid >> 2;
-        uint32_t threadID_in_group = laneid % 4;
-        uint32_t d_frag[2];
-        uint32_t a_frag[4];
-        uint32_t b_frag[2];
-        uint32_t c_frag[2];
-        // load a
-        for (i = 0; i < 16; i += 4)
-        {
-            row = (i % 8 < 4) ? groupid : groupid + 8;
-            col = (i < 8) ? ((threadID_in_group * 4) + (i & 0x3)) : ((threadID_in_group * 4) + (i & 0x3) + 16);
-            a_frag[i / 4] = *(uint32_t *)(a + row * K + col);
-        }
-        // load b
-        for (i = 0; i < 8; i += 4)
-        {
-            row = (i < 4) ? ((threadID_in_group * 4) + (i & 0x3)) : ((threadID_in_group * 4) + (i & 0x3) + 16);
-            col = groupid;
-            b_frag[i / 4] = *(uint32_t *)(b + col * K + row);
-        }
-        // load c
-        for (i = 0; i < 4; i += 2)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            c_frag[i / 2] = *(uint32_t *)(c + row * N + col);
-        }
-        // mma
+        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t a_frag[4], b_frag[2];
+        uint32_t c_frag[2], d_frag[2];
+
+        LOAD_A_M16K32_FP8();
+        LOAD_B_N8K32_FP8();
+        LOAD_C_M16N8_F16();
         asm volatile(
             "mma.sync.aligned.m16n8k32.row.col.f16.e5m2.e4m3.f16 "
             "{%0, %1}, "
@@ -581,49 +293,20 @@ extern "C" // fp8 m16n8k32 f16_output
             : "r"(a_frag[0]), "r"(a_frag[1]), "r"(a_frag[2]), "r"(a_frag[3]),
               "r"(b_frag[0]), "r"(b_frag[1]),
               "r"(c_frag[0]), "r"(c_frag[1]));
-        // store d
-        for (i = 0; i < 4; i += 2)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            *(uint32_t *)(d + row * N + col) = d_frag[i / 2];
-        }
+        STORE_D_M16N8_F16();
     }
 
     __global__ void mma_m16n8k32_f16_e4m3_e5m2_f16_kernel(
         uint16_t *d, uint8_t *a, uint8_t *b, uint16_t *c)
     {
         const uint32_t N = 8, K = 32;
-        uint32_t row, col, i;
-        uint32_t laneid = threadIdx.x % 32;
-        uint32_t groupid = laneid >> 2;
-        uint32_t threadID_in_group = laneid % 4;
-        uint32_t d_frag[2];
-        uint32_t a_frag[4];
-        uint32_t b_frag[2];
-        uint32_t c_frag[2];
-        // load a
-        for (i = 0; i < 16; i += 4)
-        {
-            row = (i % 8 < 4) ? groupid : groupid + 8;
-            col = (i < 8) ? ((threadID_in_group * 4) + (i & 0x3)) : ((threadID_in_group * 4) + (i & 0x3) + 16);
-            a_frag[i / 4] = *(uint32_t *)(a + row * K + col);
-        }
-        // load b
-        for (i = 0; i < 8; i += 4)
-        {
-            row = (i < 4) ? ((threadID_in_group * 4) + (i & 0x3)) : ((threadID_in_group * 4) + (i & 0x3) + 16);
-            col = groupid;
-            b_frag[i / 4] = *(uint32_t *)(b + col * K + row);
-        }
-        // load c
-        for (i = 0; i < 4; i += 2)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            c_frag[i / 2] = *(uint32_t *)(c + row * N + col);
-        }
-        // mma
+        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t a_frag[4], b_frag[2];
+        uint32_t c_frag[2], d_frag[2];
+
+        LOAD_A_M16K32_FP8();
+        LOAD_B_N8K32_FP8();
+        LOAD_C_M16N8_F16();
         asm volatile(
             "mma.sync.aligned.m16n8k32.row.col.f16.e4m3.e5m2.f16 "
             "{%0, %1}, "
@@ -634,49 +317,20 @@ extern "C" // fp8 m16n8k32 f16_output
             : "r"(a_frag[0]), "r"(a_frag[1]), "r"(a_frag[2]), "r"(a_frag[3]),
               "r"(b_frag[0]), "r"(b_frag[1]),
               "r"(c_frag[0]), "r"(c_frag[1]));
-        // store d
-        for (i = 0; i < 4; i += 2)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            *(uint32_t *)(d + row * N + col) = d_frag[i / 2];
-        }
+        STORE_D_M16N8_F16();
     }
 
     __global__ void mma_m16n8k32_f16_e4m3_e4m3_f16_kernel(
         uint16_t *d, uint8_t *a, uint8_t *b, uint16_t *c)
     {
         const uint32_t N = 8, K = 32;
-        uint32_t row, col, i;
-        uint32_t laneid = threadIdx.x % 32;
-        uint32_t groupid = laneid >> 2;
-        uint32_t threadID_in_group = laneid % 4;
-        uint32_t d_frag[2];
-        uint32_t a_frag[4];
-        uint32_t b_frag[2];
-        uint32_t c_frag[2];
-        // load a
-        for (i = 0; i < 16; i += 4)
-        {
-            row = (i % 8 < 4) ? groupid : groupid + 8;
-            col = (i < 8) ? ((threadID_in_group * 4) + (i & 0x3)) : ((threadID_in_group * 4) + (i & 0x3) + 16);
-            a_frag[i / 4] = *(uint32_t *)(a + row * K + col);
-        }
-        // load b
-        for (i = 0; i < 8; i += 4)
-        {
-            row = (i < 4) ? ((threadID_in_group * 4) + (i & 0x3)) : ((threadID_in_group * 4) + (i & 0x3) + 16);
-            col = groupid;
-            b_frag[i / 4] = *(uint32_t *)(b + col * K + row);
-        }
-        // load c
-        for (i = 0; i < 4; i += 2)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            c_frag[i / 2] = *(uint32_t *)(c + row * N + col);
-        }
-        // mma
+        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t a_frag[4], b_frag[2];
+        uint32_t c_frag[2], d_frag[2];
+
+        LOAD_A_M16K32_FP8();
+        LOAD_B_N8K32_FP8();
+        LOAD_C_M16N8_F16();
         asm volatile(
             "mma.sync.aligned.m16n8k32.row.col.f16.e4m3.e4m3.f16 "
             "{%0, %1}, "
@@ -687,13 +341,7 @@ extern "C" // fp8 m16n8k32 f16_output
             : "r"(a_frag[0]), "r"(a_frag[1]), "r"(a_frag[2]), "r"(a_frag[3]),
               "r"(b_frag[0]), "r"(b_frag[1]),
               "r"(c_frag[0]), "r"(c_frag[1]));
-        // store d
-        for (i = 0; i < 4; i += 2)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            *(uint32_t *)(d + row * N + col) = d_frag[i / 2];
-        }
+        STORE_D_M16N8_F16();
     }
 
     void mma_m16n8k32_f16_e5m2_e5m2_f16(
@@ -726,37 +374,14 @@ extern "C" // fp8 m16n8k16 f16_output
     __global__ void mma_m16n8k16_f16_e5m2_e5m2_f16_kernel(
         uint16_t *d, uint8_t *a, uint8_t *b, uint16_t *c)
     {
-        const uint32_t N = 8, K = 16;
-        uint32_t row, col, i;
-        uint32_t laneid = threadIdx.x % 32;
-        uint32_t groupid = laneid >> 2;
-        uint32_t threadID_in_group = laneid % 4;
-        uint32_t d_frag[2];
-        uint32_t a_frag[2];
-        uint32_t b_frag[1];
-        uint32_t c_frag[2];
-        // load a
-        for (i = 0; i < 8; i += 4)
-        {
-            row = (i < 4) ? groupid : groupid + 8;
-            col = (threadID_in_group * 4) + (i & 0x3);
-            a_frag[i / 4] = *(uint32_t *)(a + row * K + col);
-        }
-        // load b
-        for (i = 0; i < 4; i += 4)
-        {
-            row = (threadID_in_group * 4) + i;
-            col = groupid;
-            b_frag[i / 4] = *(uint32_t *)(b + col * K + row);
-        }
-        // load c
-        for (i = 0; i < 4; i += 2)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            c_frag[i / 2] = *(uint32_t *)(c + row * N + col);
-        }
-        // mma
+        const uint32_t N = 8, K = 32;
+        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t a_frag[2], b_frag[1];
+        uint32_t c_frag[2], d_frag[2];
+
+        LOAD_A_M16K16_FP8();
+        LOAD_B_N8K16_FP8();
+        LOAD_C_M16N8_F16();
         asm volatile(
             "mma.sync.aligned.m16n8k16.row.col.f16.e5m2.e5m2.f16 "
             "{%0, %1}, "
@@ -767,49 +392,20 @@ extern "C" // fp8 m16n8k16 f16_output
             : "r"(a_frag[0]), "r"(a_frag[1]),
               "r"(b_frag[0]),
               "r"(c_frag[0]), "r"(c_frag[1]));
-        // store d
-        for (i = 0; i < 4; i += 2)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            *(uint32_t *)(d + row * N + col) = d_frag[i / 2];
-        }
+        STORE_D_M16N8_F16();
     }
 
     __global__ void mma_m16n8k16_f16_e5m2_e4m3_f16_kernel(
         uint16_t *d, uint8_t *a, uint8_t *b, uint16_t *c)
     {
-        const uint32_t N = 8, K = 16;
-        uint32_t row, col, i;
-        uint32_t laneid = threadIdx.x % 32;
-        uint32_t groupid = laneid >> 2;
-        uint32_t threadID_in_group = laneid % 4;
-        uint32_t d_frag[2];
-        uint32_t a_frag[2];
-        uint32_t b_frag[1];
-        uint32_t c_frag[2];
-        // load a
-        for (i = 0; i < 8; i += 4)
-        {
-            row = (i < 4) ? groupid : groupid + 8;
-            col = (threadID_in_group * 4) + (i & 0x3);
-            a_frag[i / 4] = *(uint32_t *)(a + row * K + col);
-        }
-        // load b
-        for (i = 0; i < 4; i += 4)
-        {
-            row = (threadID_in_group * 4) + i;
-            col = groupid;
-            b_frag[i / 4] = *(uint32_t *)(b + col * K + row);
-        }
-        // load c
-        for (i = 0; i < 4; i += 2)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            c_frag[i / 2] = *(uint32_t *)(c + row * N + col);
-        }
-        // mma
+        const uint32_t N = 8, K = 32;
+        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t a_frag[2], b_frag[1];
+        uint32_t c_frag[2], d_frag[2];
+
+        LOAD_A_M16K16_FP8();
+        LOAD_B_N8K16_FP8();
+        LOAD_C_M16N8_F16();
         asm volatile(
             "mma.sync.aligned.m16n8k16.row.col.f16.e5m2.e4m3.f16 "
             "{%0, %1}, "
@@ -820,49 +416,20 @@ extern "C" // fp8 m16n8k16 f16_output
             : "r"(a_frag[0]), "r"(a_frag[1]),
               "r"(b_frag[0]),
               "r"(c_frag[0]), "r"(c_frag[1]));
-        // store d
-        for (i = 0; i < 4; i += 2)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            *(uint32_t *)(d + row * N + col) = d_frag[i / 2];
-        }
+        STORE_D_M16N8_F16();
     }
 
     __global__ void mma_m16n8k16_f16_e4m3_e5m2_f16_kernel(
         uint16_t *d, uint8_t *a, uint8_t *b, uint16_t *c)
     {
-        const uint32_t N = 8, K = 16;
-        uint32_t row, col, i;
-        uint32_t laneid = threadIdx.x % 32;
-        uint32_t groupid = laneid >> 2;
-        uint32_t threadID_in_group = laneid % 4;
-        uint32_t d_frag[2];
-        uint32_t a_frag[2];
-        uint32_t b_frag[1];
-        uint32_t c_frag[2];
-        // load a
-        for (i = 0; i < 8; i += 4)
-        {
-            row = (i < 4) ? groupid : groupid + 8;
-            col = (threadID_in_group * 4) + (i & 0x3);
-            a_frag[i / 4] = *(uint32_t *)(a + row * K + col);
-        }
-        // load b
-        for (i = 0; i < 4; i += 4)
-        {
-            row = (threadID_in_group * 4) + i;
-            col = groupid;
-            b_frag[i / 4] = *(uint32_t *)(b + col * K + row);
-        }
-        // load c
-        for (i = 0; i < 4; i += 2)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            c_frag[i / 2] = *(uint32_t *)(c + row * N + col);
-        }
-        // mma
+        const uint32_t N = 8, K = 32;
+        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t a_frag[2], b_frag[1];
+        uint32_t c_frag[2], d_frag[2];
+
+        LOAD_A_M16K16_FP8();
+        LOAD_B_N8K16_FP8();
+        LOAD_C_M16N8_F16();
         asm volatile(
             "mma.sync.aligned.m16n8k16.row.col.f16.e4m3.e5m2.f16 "
             "{%0, %1}, "
@@ -873,49 +440,20 @@ extern "C" // fp8 m16n8k16 f16_output
             : "r"(a_frag[0]), "r"(a_frag[1]),
               "r"(b_frag[0]),
               "r"(c_frag[0]), "r"(c_frag[1]));
-        // store d
-        for (i = 0; i < 4; i += 2)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            *(uint32_t *)(d + row * N + col) = d_frag[i / 2];
-        }
+        STORE_D_M16N8_F16();
     }
 
     __global__ void mma_m16n8k16_f16_e4m3_e4m3_f16_kernel(
         uint16_t *d, uint8_t *a, uint8_t *b, uint16_t *c)
     {
-        const uint32_t N = 8, K = 16;
-        uint32_t row, col, i;
-        uint32_t laneid = threadIdx.x % 32;
-        uint32_t groupid = laneid >> 2;
-        uint32_t threadID_in_group = laneid % 4;
-        uint32_t d_frag[2];
-        uint32_t a_frag[2];
-        uint32_t b_frag[1];
-        uint32_t c_frag[2];
-        // load a
-        for (i = 0; i < 8; i += 4)
-        {
-            row = (i < 4) ? groupid : groupid + 8;
-            col = (threadID_in_group * 4) + (i & 0x3);
-            a_frag[i / 4] = *(uint32_t *)(a + row * K + col);
-        }
-        // load b
-        for (i = 0; i < 4; i += 4)
-        {
-            row = (threadID_in_group * 4) + i;
-            col = groupid;
-            b_frag[i / 4] = *(uint32_t *)(b + col * K + row);
-        }
-        // load c
-        for (i = 0; i < 4; i += 2)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            c_frag[i / 2] = *(uint32_t *)(c + row * N + col);
-        }
-        // mma
+        const uint32_t N = 8, K = 32;
+        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t a_frag[2], b_frag[1];
+        uint32_t c_frag[2], d_frag[2];
+
+        LOAD_A_M16K16_FP8();
+        LOAD_B_N8K16_FP8();
+        LOAD_C_M16N8_F16();
         asm volatile(
             "mma.sync.aligned.m16n8k16.row.col.f16.e4m3.e4m3.f16 "
             "{%0, %1}, "
@@ -926,13 +464,7 @@ extern "C" // fp8 m16n8k16 f16_output
             : "r"(a_frag[0]), "r"(a_frag[1]),
               "r"(b_frag[0]),
               "r"(c_frag[0]), "r"(c_frag[1]));
-        // store d
-        for (i = 0; i < 4; i += 2)
-        {
-            row = (i < 2) ? groupid : groupid + 8;
-            col = (threadID_in_group * 2) + (i & 0x1);
-            *(uint32_t *)(d + row * N + col) = d_frag[i / 2];
-        }
+        STORE_D_M16N8_F16();
     }
 
     void mma_m16n8k16_f16_e5m2_e5m2_f16(

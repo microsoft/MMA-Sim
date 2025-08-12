@@ -1,6 +1,12 @@
 import torch
 
-from .utils import fma, truncate_to_tf32, flush_denormal, pairwise_dot, amd_fused_dot_add
+from .utils import (
+    fma,
+    truncate_to_tf32,
+    flush_denormal,
+    pairwise_dot,
+    amd_fused_dot_add,
+)
 from ..isa import AMD_MFMABase
 
 cdna1_mfma_qualifiers = [
@@ -23,7 +29,7 @@ cdna1_mfma_qualifiers = [
     "f32_16x16x2bf16",
     "f32_4x4x2bf16",
 ]
-cdna2_mfma_qualifiers = cdna1_mfma_qualifiers + [
+cdna2_mfma_qualifiers = [
     # cdna2 bf16
     "f32_32x32x8bf16_1k",
     "f32_32x32x4bf16_1k",
@@ -66,7 +72,7 @@ cdna3_mfma_qualifiers = [
 
 arch_mfma_qualifiers = {
     "CDNA1": cdna1_mfma_qualifiers,
-    "CDNA2": cdna2_mfma_qualifiers,
+    "CDNA2": cdna2_mfma_qualifiers + cdna1_mfma_qualifiers,
     "CDNA3": cdna3_mfma_qualifiers,
 }
 

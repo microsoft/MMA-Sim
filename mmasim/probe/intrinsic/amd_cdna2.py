@@ -7,6 +7,12 @@ from . import AMD_MFMA
 path = pathlib.Path(__file__).parent / "impl/amd_cdna2.so"
 lib = ctypes.CDLL(str(path))
 
+# cdna2 bf16
+lib.mfma_f32_32x32x8bf16_1k.argtypes = [ctypes.c_void_p] * 4
+lib.mfma_f32_32x32x4bf16_1k.argtypes = [ctypes.c_void_p] * 4
+lib.mfma_f32_16x16x16bf16_1k.argtypes = [ctypes.c_void_p] * 4
+lib.mfma_f32_16x16x4bf16_1k.argtypes = [ctypes.c_void_p] * 4
+lib.mfma_f32_4x4x4bf16_1k.argtypes = [ctypes.c_void_p] * 4
 # cdna1 f32
 lib.mfma_f32_32x32x2f32.argtypes = [ctypes.c_void_p] * 4
 lib.mfma_f32_32x32x1f32.argtypes = [ctypes.c_void_p] * 4
@@ -25,14 +31,14 @@ lib.mfma_f32_32x32x2bf16.argtypes = [ctypes.c_void_p] * 4
 lib.mfma_f32_16x16x8bf16.argtypes = [ctypes.c_void_p] * 4
 lib.mfma_f32_16x16x2bf16.argtypes = [ctypes.c_void_p] * 4
 lib.mfma_f32_4x4x2bf16.argtypes = [ctypes.c_void_p] * 4
-# cdna2 bf16
-lib.mfma_f32_32x32x8bf16_1k.argtypes = [ctypes.c_void_p] * 4
-lib.mfma_f32_32x32x4bf16_1k.argtypes = [ctypes.c_void_p] * 4
-lib.mfma_f32_16x16x16bf16_1k.argtypes = [ctypes.c_void_p] * 4
-lib.mfma_f32_16x16x4bf16_1k.argtypes = [ctypes.c_void_p] * 4
-lib.mfma_f32_4x4x4bf16_1k.argtypes = [ctypes.c_void_p] * 4
 
 mfma_intrinsic_impls = {
+    # cdna2 bf16
+    "f32_32x32x8bf16_1k": lib.mfma_f32_32x32x8bf16_1k,
+    "f32_32x32x4bf16_1k": lib.mfma_f32_32x32x4bf16_1k,
+    "f32_16x16x16bf16_1k": lib.mfma_f32_16x16x16bf16_1k,
+    "f32_16x16x4bf16_1k": lib.mfma_f32_16x16x4bf16_1k,
+    "f32_4x4x4bf16_1k": lib.mfma_f32_4x4x4bf16_1k,
     # cdna1 f32
     "f32_32x32x2f32": lib.mfma_f32_32x32x2f32,
     "f32_32x32x1f32": lib.mfma_f32_32x32x1f32,
@@ -51,12 +57,6 @@ mfma_intrinsic_impls = {
     "f32_16x16x8bf16": lib.mfma_f32_16x16x8bf16,
     "f32_16x16x2bf16": lib.mfma_f32_16x16x2bf16,
     "f32_4x4x2bf16": lib.mfma_f32_4x4x2bf16,
-    # cdna2 bf16
-    "f32_32x32x8bf16_1k": lib.mfma_f32_32x32x8bf16_1k,
-    "f32_32x32x4bf16_1k": lib.mfma_f32_32x32x4bf16_1k,
-    "f32_16x16x16bf16_1k": lib.mfma_f32_16x16x16bf16_1k,
-    "f32_16x16x4bf16_1k": lib.mfma_f32_16x16x4bf16_1k,
-    "f32_4x4x4bf16_1k": lib.mfma_f32_4x4x4bf16_1k,
 }
 mfma_intrinsics = {
     qualifier: AMD_MFMA(qualifier, mfma_intrinsic_impls[qualifier])

@@ -1,6 +1,138 @@
-#include <stdint.h>
+#include "tcgen05mma.h"
 
-#define desc_encode(x) (((x) & 0x3ffff) >> 4)
+extern "C" // tf32
+{
+    __global__ void tcgen05mma_m64n8k8_f32_tf32_tf32_kernel(
+        uint32_t *d, uint32_t *a, uint32_t *b)
+    {
+        const uint32_t M = 64, N = 8, K = 8;
+        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
+        uint32_t row, col, i;
+        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
+        uint64_t a_desc, b_desc;
+        __shared__ uint32_t a_smem[M * K], b_smem[N * K];
+        __shared__ uint32_t d_tmem_addr;
+        __shared__ uint64_t mma_barrier;
+        uint32_t d_frag[4];
+
+        LOAD_A_M64K8_TF32();
+        LOAD_B_N8K8_TF32();
+        INIT_MBARRIER();
+        ALLOC_TMEM();
+        __syncthreads();
+        LOAD_D_M64N8();
+        __syncthreads();
+        i_desc |= (1 << 4) | (2 << 7) | (2 << 10); // f32_tf32_tf32
+        MMA("tf32");
+        STORE_D_M64N8();
+        DEALLOC_TMEM();
+    }
+
+    void tcgen05mma_m64n8k8_f32_tf32_tf32(
+        uint32_t *d, uint32_t *a, uint32_t *b)
+    {
+        tcgen05mma_m64n8k8_f32_tf32_tf32_kernel<<<1, 128>>>(d, a, b);
+    }
+}
+
+extern "C" // f16 and bf16
+{
+    __global__ void tcgen05mma_m64n8k16_f16_f16_f16_kernel(
+        uint16_t *d, uint16_t *a, uint16_t *b)
+    {
+        const uint32_t M = 64, N = 8, K = 16;
+        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
+        uint32_t row, col, i;
+        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
+        uint64_t a_desc, b_desc;
+        __shared__ uint16_t a_smem[M * K], b_smem[N * K];
+        __shared__ uint32_t d_tmem_addr;
+        __shared__ uint64_t mma_barrier;
+        uint32_t d_frag[4];
+
+        LOAD_A_M64K16_F16BF16();
+        LOAD_B_N8K16_F16BF16();
+        INIT_MBARRIER();
+        ALLOC_TMEM();
+        __syncthreads();
+        LOAD_D_M64N8();
+        __syncthreads();
+        i_desc |= 0; // f16_f16_f16
+        MMA("f16");
+        STORE_D_M64N8();
+        DEALLOC_TMEM();
+    }
+
+    __global__ void tcgen05mma_m64n8k16_f32_f16_f16_kernel(
+        uint32_t *d, uint16_t *a, uint16_t *b)
+    {
+        const uint32_t M = 64, N = 8, K = 16;
+        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
+        uint32_t row, col, i;
+        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
+        uint64_t a_desc, b_desc;
+        __shared__ uint16_t a_smem[M * K], b_smem[N * K];
+        __shared__ uint32_t d_tmem_addr;
+        __shared__ uint64_t mma_barrier;
+        uint32_t d_frag[4];
+
+        LOAD_A_M64K16_F16BF16();
+        LOAD_B_N8K16_F16BF16();
+        INIT_MBARRIER();
+        ALLOC_TMEM();
+        __syncthreads();
+        LOAD_D_M64N8();
+        __syncthreads();
+        i_desc |= 1 << 4; // f32_f16_f16
+        MMA("f16");
+        STORE_D_M64N8();
+        DEALLOC_TMEM();
+    }
+
+    __global__ void tcgen05mma_m64n8k16_f32_bf16_bf16_kernel(
+        uint32_t *d, uint16_t *a, uint16_t *b)
+    {
+        const uint32_t M = 64, N = 8, K = 16;
+        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
+        uint32_t row, col, i;
+        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
+        uint64_t a_desc, b_desc;
+        __shared__ uint16_t a_smem[M * K], b_smem[N * K];
+        __shared__ uint32_t d_tmem_addr;
+        __shared__ uint64_t mma_barrier;
+        uint32_t d_frag[4];
+
+        LOAD_A_M64K16_F16BF16();
+        LOAD_B_N8K16_F16BF16();
+        INIT_MBARRIER();
+        ALLOC_TMEM();
+        __syncthreads();
+        LOAD_D_M64N8();
+        __syncthreads();
+        i_desc |= (1 << 4) | (1 << 7) | (1 << 10); // f32_bf16_bf16
+        MMA("f16");
+        STORE_D_M64N8();
+        DEALLOC_TMEM();
+    }
+
+    void tcgen05mma_m64n8k16_f16_bf16_f16_bf16(
+        uint16_t *d, uint16_t *a, uint16_t *b)
+    {
+        tcgen05mma_m64n8k16_f16_f16_f16_kernel<<<1, 128>>>(d, a, b);
+    }
+
+    void tcgen05mma_m64n8k16_f32_f16_f16(
+        uint32_t *d, uint16_t *a, uint16_t *b)
+    {
+        tcgen05mma_m64n8k16_f32_f16_f16_kernel<<<1, 128>>>(d, a, b);
+    }
+
+    void tcgen05mma_m64n8k16_f32_bf16_bf16(
+        uint32_t *d, uint16_t *a, uint16_t *b)
+    {
+        tcgen05mma_m64n8k16_f32_bf16_bf16_kernel<<<1, 128>>>(d, a, b);
+    }
+}
 
 extern "C" // fp8 m64n8k32 f32_output
 {
@@ -8,234 +140,52 @@ extern "C" // fp8 m64n8k32 f32_output
         uint32_t *d, uint8_t *a, uint8_t *b)
     {
         const uint32_t M = 64, N = 8, K = 32;
+        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
         uint32_t row, col, i;
-        uint32_t tid = threadIdx.x;
-        uint32_t warpid = tid / 32;
-        uint32_t laneid = tid % 32;
-        __shared__ uint8_t a_smem[M * K];
-        __shared__ uint8_t b_smem[N * K];
+        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
+        uint64_t a_desc, b_desc;
+        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
         __shared__ uint32_t d_tmem_addr;
-        uint32_t d_frag[4];
-        // load a
-        for (i = 0; i < 8; i++)
-        {
-            for (uint32_t k = 0; k < 2; k++)
-            {
-                row = i * 8 + tid / 16;
-                col = k * 16 + tid % 16;
-                a_smem[i * 256 + k * 128 + tid] = a[row * K + col];
-            }
-        }
-        uint64_t a_desc = desc_encode(__cvta_generic_to_shared(a_smem));
-        a_desc |= desc_encode(128ll) << 16;
-        a_desc |= desc_encode(256ll) << 32;
-        a_desc |= 1ll << 46;
-        // load b
-        for (uint32_t k = 0; k < 2; k++)
-        {
-            row = k * 16 + tid % 16;
-            col = tid / 16;
-            b_smem[k * 128 + tid] = b[col * K + row];
-        }
-        uint64_t b_desc = desc_encode(__cvta_generic_to_shared(b_smem));
-        b_desc |= desc_encode(128ll) << 16;
-        b_desc |= desc_encode(256ll) << 32;
-        b_desc |= 1ll << 46;
-        // load d
-        if (warpid == 0)
-        {
-            asm volatile(
-                "tcgen05.alloc.cta_group::1.sync.aligned.b32 [%0], 32;"
-                :
-                : "r"((uint32_t)__cvta_generic_to_shared(&d_tmem_addr)));
-        }
-        __syncthreads();
-        for (i = 0; i < 4; i++)
-        {
-            row = warpid * 16 + i / 2 * 8 + laneid / 4;
-            col = laneid % 4 * 2 + i % 2;
-            d_frag[i] = d[row * N + col];
-        }
-        asm volatile("tcgen05.st.sync.aligned.16x256b.x1.b32 "
-                     "[%0], {%1, %2, %3, %4};"
-                     :
-                     : "r"(d_tmem_addr + ((warpid * 32) << 16)),
-                       "r"(d_frag[0]), "r"(d_frag[1]), "r"(d_frag[2]), "r"(d_frag[3]));
-        asm volatile("tcgen05.wait::st.sync.aligned;");
-        __syncthreads();
-        // mma
-        uint32_t i_desc = (1 << 4) | (1 << 7) | (1 << 10);
         __shared__ uint64_t mma_barrier;
-        const uint32_t mask[4] = {0, 0, 0, 0};
-        i_desc |= N >> 3 << 17;
-        i_desc |= M >> 4 << 24;
-        if (tid == 0)
-        {
-            asm volatile("mbarrier.init.shared::cta.b64 [%0], 1;"
-                         :
-                         : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier)));
-        }
+        uint32_t d_frag[4];
+
+        LOAD_A_M64K32_F8F6F4();
+        LOAD_B_N8K32_F8F6F4();
+        INIT_MBARRIER();
+        ALLOC_TMEM();
         __syncthreads();
-        uint32_t mma_barrier_phase_bit = 0;
-        if (tid == 0)
-        {
-            asm volatile(
-                "tcgen05.mma.cta_group::1.kind::f8f6f4 [%0], %1, %2, %3, {%4, %5, %6, %7}, 1;"
-                :
-                : "r"(d_tmem_addr), "l"(a_desc), "l"(b_desc), "r"(i_desc), "r"(mask[0]), "r"(mask[1]), "r"(mask[2]), "r"(mask[3]));
-            asm volatile(
-                "tcgen05.commit.cta_group::1.mbarrier::arrive::one.shared::cluster.b64 [%0];"
-                :
-                : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier)));
-        }
-        asm volatile(
-            "{\n"
-            ".reg .pred P1;\n"
-            "LAB_WAIT:\n"
-            "mbarrier.try_wait.parity.shared::cta.b64 P1, [%0], %1;\n"
-            "@P1    bra DONE;\n"
-            "bra    LAB_WAIT;\n"
-            "DONE:\n"
-            "}\n"
-            :
-            : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier)), "r"(mma_barrier_phase_bit));
-        mma_barrier_phase_bit ^= 1;
-        // store d
-        asm volatile("tcgen05.ld.sync.aligned.16x256b.x1.b32 "
-                     "{%0, %1, %2, %3}, [%4];"
-                     : "=r"(d_frag[0]), "=r"(d_frag[1]), "=r"(d_frag[2]), "=r"(d_frag[3])
-                     : "r"(d_tmem_addr + ((warpid * 32) << 16)));
-        asm volatile("tcgen05.wait::ld.sync.aligned;");
-        for (i = 0; i < 4; i++)
-        {
-            row = warpid * 16 + i / 2 * 8 + laneid / 4;
-            col = laneid % 4 * 2 + i % 2;
-            d[row * N + col] = d_frag[i];
-        }
+        LOAD_D_M64N8();
         __syncthreads();
-        if (warpid == 0)
-        {
-            asm volatile(
-                "tcgen05.dealloc.cta_group::1.sync.aligned.b32 %0, 32;" : : "r"(d_tmem_addr));
-            asm volatile("tcgen05.relinquish_alloc_permit.cta_group::1.sync.aligned;");
-        }
+        i_desc |= (1 << 4) | (1 << 7) | (1 << 10); // f32_e5m2_e5m2
+        MMA("f8f6f4");
+        STORE_D_M64N8();
+        DEALLOC_TMEM();
     }
 
     __global__ void tcgen05mma_m64n8k32_f32_e4m3_e4m3_kernel(
         uint32_t *d, uint8_t *a, uint8_t *b)
     {
         const uint32_t M = 64, N = 8, K = 32;
+        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
         uint32_t row, col, i;
-        uint32_t tid = threadIdx.x;
-        uint32_t warpid = tid / 32;
-        uint32_t laneid = tid % 32;
-        __shared__ uint8_t a_smem[M * K];
-        __shared__ uint8_t b_smem[N * K];
+        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
+        uint64_t a_desc, b_desc;
+        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
         __shared__ uint32_t d_tmem_addr;
-        uint32_t d_frag[4];
-        // load a
-        for (i = 0; i < 8; i++)
-        {
-            for (uint32_t k = 0; k < 2; k++)
-            {
-                row = i * 8 + tid / 16;
-                col = k * 16 + tid % 16;
-                a_smem[i * 256 + k * 128 + tid] = a[row * K + col];
-            }
-        }
-        uint64_t a_desc = desc_encode(__cvta_generic_to_shared(a_smem));
-        a_desc |= desc_encode(128ll) << 16;
-        a_desc |= desc_encode(256ll) << 32;
-        a_desc |= 1ll << 46;
-        // load b
-        for (uint32_t k = 0; k < 2; k++)
-        {
-            row = k * 16 + tid % 16;
-            col = tid / 16;
-            b_smem[k * 128 + tid] = b[col * K + row];
-        }
-        uint64_t b_desc = desc_encode(__cvta_generic_to_shared(b_smem));
-        b_desc |= desc_encode(128ll) << 16;
-        b_desc |= desc_encode(256ll) << 32;
-        b_desc |= 1ll << 46;
-        // load d
-        if (warpid == 0)
-        {
-            asm volatile(
-                "tcgen05.alloc.cta_group::1.sync.aligned.b32 [%0], 32;"
-                :
-                : "r"((uint32_t)__cvta_generic_to_shared(&d_tmem_addr)));
-        }
-        __syncthreads();
-        for (i = 0; i < 4; i++)
-        {
-            row = warpid * 16 + i / 2 * 8 + laneid / 4;
-            col = laneid % 4 * 2 + i % 2;
-            d_frag[i] = d[row * N + col];
-        }
-        asm volatile("tcgen05.st.sync.aligned.16x256b.x1.b32 "
-                     "[%0], {%1, %2, %3, %4};"
-                     :
-                     : "r"(d_tmem_addr + ((warpid * 32) << 16)),
-                       "r"(d_frag[0]), "r"(d_frag[1]), "r"(d_frag[2]), "r"(d_frag[3]));
-        asm volatile("tcgen05.wait::st.sync.aligned;");
-        __syncthreads();
-        // mma
-        uint32_t i_desc = 1 << 4;
         __shared__ uint64_t mma_barrier;
-        const uint32_t mask[4] = {0, 0, 0, 0};
-        i_desc |= N >> 3 << 17;
-        i_desc |= M >> 4 << 24;
-        if (tid == 0)
-        {
-            asm volatile("mbarrier.init.shared::cta.b64 [%0], 1;"
-                         :
-                         : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier)));
-        }
+        uint32_t d_frag[4];
+
+        LOAD_A_M64K32_F8F6F4();
+        LOAD_B_N8K32_F8F6F4();
+        INIT_MBARRIER();
+        ALLOC_TMEM();
         __syncthreads();
-        uint32_t mma_barrier_phase_bit = 0;
-        if (tid == 0)
-        {
-            asm volatile(
-                "tcgen05.mma.cta_group::1.kind::f8f6f4 [%0], %1, %2, %3, {%4, %5, %6, %7}, 1;"
-                :
-                : "r"(d_tmem_addr), "l"(a_desc), "l"(b_desc), "r"(i_desc), "r"(mask[0]), "r"(mask[1]), "r"(mask[2]), "r"(mask[3]));
-            asm volatile(
-                "tcgen05.commit.cta_group::1.mbarrier::arrive::one.shared::cluster.b64 [%0];"
-                :
-                : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier)));
-        }
-        asm volatile(
-            "{\n"
-            ".reg .pred P1;\n"
-            "LAB_WAIT:\n"
-            "mbarrier.try_wait.parity.shared::cta.b64 P1, [%0], %1;\n"
-            "@P1    bra DONE;\n"
-            "bra    LAB_WAIT;\n"
-            "DONE:\n"
-            "}\n"
-            :
-            : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier)), "r"(mma_barrier_phase_bit));
-        mma_barrier_phase_bit ^= 1;
-        // store d
-        asm volatile("tcgen05.ld.sync.aligned.16x256b.x1.b32 "
-                     "{%0, %1, %2, %3}, [%4];"
-                     : "=r"(d_frag[0]), "=r"(d_frag[1]), "=r"(d_frag[2]), "=r"(d_frag[3])
-                     : "r"(d_tmem_addr + ((warpid * 32) << 16)));
-        asm volatile("tcgen05.wait::ld.sync.aligned;");
-        for (i = 0; i < 4; i++)
-        {
-            row = warpid * 16 + i / 2 * 8 + laneid / 4;
-            col = laneid % 4 * 2 + i % 2;
-            d[row * N + col] = d_frag[i];
-        }
+        LOAD_D_M64N8();
         __syncthreads();
-        if (warpid == 0)
-        {
-            asm volatile(
-                "tcgen05.dealloc.cta_group::1.sync.aligned.b32 %0, 32;" : : "r"(d_tmem_addr));
-            asm volatile("tcgen05.relinquish_alloc_permit.cta_group::1.sync.aligned;");
-        }
+        i_desc |= 1 << 4; // f32_e4m3_e4m3
+        MMA("f8f6f4");
+        STORE_D_M64N8();
+        DEALLOC_TMEM();
     }
 
     void tcgen05mma_m64n8k32_f32_e5m2_e5m2(
@@ -257,234 +207,52 @@ extern "C" // fp8 m64n8k32 f16_output
         uint16_t *d, uint8_t *a, uint8_t *b)
     {
         const uint32_t M = 64, N = 8, K = 32;
+        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
         uint32_t row, col, i;
-        uint32_t tid = threadIdx.x;
-        uint32_t warpid = tid / 32;
-        uint32_t laneid = tid % 32;
-        __shared__ uint8_t a_smem[M * K];
-        __shared__ uint8_t b_smem[N * K];
+        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
+        uint64_t a_desc, b_desc;
+        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
         __shared__ uint32_t d_tmem_addr;
-        uint32_t d_frag[4];
-        // load a
-        for (i = 0; i < 8; i++)
-        {
-            for (uint32_t k = 0; k < 2; k++)
-            {
-                row = i * 8 + tid / 16;
-                col = k * 16 + tid % 16;
-                a_smem[i * 256 + k * 128 + tid] = a[row * K + col];
-            }
-        }
-        uint64_t a_desc = desc_encode(__cvta_generic_to_shared(a_smem));
-        a_desc |= desc_encode(128ll) << 16;
-        a_desc |= desc_encode(256ll) << 32;
-        a_desc |= 1ll << 46;
-        // load b
-        for (uint32_t k = 0; k < 2; k++)
-        {
-            row = k * 16 + tid % 16;
-            col = tid / 16;
-            b_smem[k * 128 + tid] = b[col * K + row];
-        }
-        uint64_t b_desc = desc_encode(__cvta_generic_to_shared(b_smem));
-        b_desc |= desc_encode(128ll) << 16;
-        b_desc |= desc_encode(256ll) << 32;
-        b_desc |= 1ll << 46;
-        // load d
-        if (warpid == 0)
-        {
-            asm volatile(
-                "tcgen05.alloc.cta_group::1.sync.aligned.b32 [%0], 32;"
-                :
-                : "r"((uint32_t)__cvta_generic_to_shared(&d_tmem_addr)));
-        }
-        __syncthreads();
-        for (i = 0; i < 4; i++)
-        {
-            row = warpid * 16 + i / 2 * 8 + laneid / 4;
-            col = laneid % 4 * 2 + i % 2;
-            d_frag[i] = d[row * N + col];
-        }
-        asm volatile("tcgen05.st.sync.aligned.16x256b.x1.b32 "
-                     "[%0], {%1, %2, %3, %4};"
-                     :
-                     : "r"(d_tmem_addr + ((warpid * 32) << 16)),
-                       "r"(d_frag[0]), "r"(d_frag[1]), "r"(d_frag[2]), "r"(d_frag[3]));
-        asm volatile("tcgen05.wait::st.sync.aligned;");
-        __syncthreads();
-        // mma
-        uint32_t i_desc = (1 << 7) | (1 << 10);
         __shared__ uint64_t mma_barrier;
-        const uint32_t mask[4] = {0, 0, 0, 0};
-        i_desc |= N >> 3 << 17;
-        i_desc |= M >> 4 << 24;
-        if (tid == 0)
-        {
-            asm volatile("mbarrier.init.shared::cta.b64 [%0], 1;"
-                         :
-                         : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier)));
-        }
+        uint32_t d_frag[4];
+
+        LOAD_A_M64K32_F8F6F4();
+        LOAD_B_N8K32_F8F6F4();
+        INIT_MBARRIER();
+        ALLOC_TMEM();
         __syncthreads();
-        uint32_t mma_barrier_phase_bit = 0;
-        if (tid == 0)
-        {
-            asm volatile(
-                "tcgen05.mma.cta_group::1.kind::f8f6f4 [%0], %1, %2, %3, {%4, %5, %6, %7}, 1;"
-                :
-                : "r"(d_tmem_addr), "l"(a_desc), "l"(b_desc), "r"(i_desc), "r"(mask[0]), "r"(mask[1]), "r"(mask[2]), "r"(mask[3]));
-            asm volatile(
-                "tcgen05.commit.cta_group::1.mbarrier::arrive::one.shared::cluster.b64 [%0];"
-                :
-                : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier)));
-        }
-        asm volatile(
-            "{\n"
-            ".reg .pred P1;\n"
-            "LAB_WAIT:\n"
-            "mbarrier.try_wait.parity.shared::cta.b64 P1, [%0], %1;\n"
-            "@P1    bra DONE;\n"
-            "bra    LAB_WAIT;\n"
-            "DONE:\n"
-            "}\n"
-            :
-            : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier)), "r"(mma_barrier_phase_bit));
-        mma_barrier_phase_bit ^= 1;
-        // store d
-        asm volatile("tcgen05.ld.sync.aligned.16x256b.x1.b32 "
-                     "{%0, %1, %2, %3}, [%4];"
-                     : "=r"(d_frag[0]), "=r"(d_frag[1]), "=r"(d_frag[2]), "=r"(d_frag[3])
-                     : "r"(d_tmem_addr + ((warpid * 32) << 16)));
-        asm volatile("tcgen05.wait::ld.sync.aligned;");
-        for (i = 0; i < 4; i++)
-        {
-            row = warpid * 16 + i / 2 * 8 + laneid / 4;
-            col = laneid % 4 * 2 + i % 2;
-            d[row * N + col] = d_frag[i];
-        }
+        LOAD_D_M64N8();
         __syncthreads();
-        if (warpid == 0)
-        {
-            asm volatile(
-                "tcgen05.dealloc.cta_group::1.sync.aligned.b32 %0, 32;" : : "r"(d_tmem_addr));
-            asm volatile("tcgen05.relinquish_alloc_permit.cta_group::1.sync.aligned;");
-        }
+        i_desc |= (1 << 7) | (1 << 10); // f16_e5m2_e5m2
+        MMA("f8f6f4");
+        STORE_D_M64N8();
+        DEALLOC_TMEM();
     }
 
     __global__ void tcgen05mma_m64n8k32_f16_e4m3_e4m3_kernel(
         uint16_t *d, uint8_t *a, uint8_t *b)
     {
         const uint32_t M = 64, N = 8, K = 32;
+        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
         uint32_t row, col, i;
-        uint32_t tid = threadIdx.x;
-        uint32_t warpid = tid / 32;
-        uint32_t laneid = tid % 32;
-        __shared__ uint8_t a_smem[M * K];
-        __shared__ uint8_t b_smem[N * K];
+        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
+        uint64_t a_desc, b_desc;
+        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
         __shared__ uint32_t d_tmem_addr;
-        uint32_t d_frag[4];
-        // load a
-        for (i = 0; i < 8; i++)
-        {
-            for (uint32_t k = 0; k < 2; k++)
-            {
-                row = i * 8 + tid / 16;
-                col = k * 16 + tid % 16;
-                a_smem[i * 256 + k * 128 + tid] = a[row * K + col];
-            }
-        }
-        uint64_t a_desc = desc_encode(__cvta_generic_to_shared(a_smem));
-        a_desc |= desc_encode(128ll) << 16;
-        a_desc |= desc_encode(256ll) << 32;
-        a_desc |= 1ll << 46;
-        // load b
-        for (uint32_t k = 0; k < 2; k++)
-        {
-            row = k * 16 + tid % 16;
-            col = tid / 16;
-            b_smem[k * 128 + tid] = b[col * K + row];
-        }
-        uint64_t b_desc = desc_encode(__cvta_generic_to_shared(b_smem));
-        b_desc |= desc_encode(128ll) << 16;
-        b_desc |= desc_encode(256ll) << 32;
-        b_desc |= 1ll << 46;
-        // load d
-        if (warpid == 0)
-        {
-            asm volatile(
-                "tcgen05.alloc.cta_group::1.sync.aligned.b32 [%0], 32;"
-                :
-                : "r"((uint32_t)__cvta_generic_to_shared(&d_tmem_addr)));
-        }
-        __syncthreads();
-        for (i = 0; i < 4; i++)
-        {
-            row = warpid * 16 + i / 2 * 8 + laneid / 4;
-            col = laneid % 4 * 2 + i % 2;
-            d_frag[i] = d[row * N + col];
-        }
-        asm volatile("tcgen05.st.sync.aligned.16x256b.x1.b32 "
-                     "[%0], {%1, %2, %3, %4};"
-                     :
-                     : "r"(d_tmem_addr + ((warpid * 32) << 16)),
-                       "r"(d_frag[0]), "r"(d_frag[1]), "r"(d_frag[2]), "r"(d_frag[3]));
-        asm volatile("tcgen05.wait::st.sync.aligned;");
-        __syncthreads();
-        // mma
-        uint32_t i_desc = 0;
         __shared__ uint64_t mma_barrier;
-        const uint32_t mask[4] = {0, 0, 0, 0};
-        i_desc |= N >> 3 << 17;
-        i_desc |= M >> 4 << 24;
-        if (tid == 0)
-        {
-            asm volatile("mbarrier.init.shared::cta.b64 [%0], 1;"
-                         :
-                         : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier)));
-        }
+        uint32_t d_frag[4];
+
+        LOAD_A_M64K32_F8F6F4();
+        LOAD_B_N8K32_F8F6F4();
+        INIT_MBARRIER();
+        ALLOC_TMEM();
         __syncthreads();
-        uint32_t mma_barrier_phase_bit = 0;
-        if (tid == 0)
-        {
-            asm volatile(
-                "tcgen05.mma.cta_group::1.kind::f8f6f4 [%0], %1, %2, %3, {%4, %5, %6, %7}, 1;"
-                :
-                : "r"(d_tmem_addr), "l"(a_desc), "l"(b_desc), "r"(i_desc), "r"(mask[0]), "r"(mask[1]), "r"(mask[2]), "r"(mask[3]));
-            asm volatile(
-                "tcgen05.commit.cta_group::1.mbarrier::arrive::one.shared::cluster.b64 [%0];"
-                :
-                : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier)));
-        }
-        asm volatile(
-            "{\n"
-            ".reg .pred P1;\n"
-            "LAB_WAIT:\n"
-            "mbarrier.try_wait.parity.shared::cta.b64 P1, [%0], %1;\n"
-            "@P1    bra DONE;\n"
-            "bra    LAB_WAIT;\n"
-            "DONE:\n"
-            "}\n"
-            :
-            : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier)), "r"(mma_barrier_phase_bit));
-        mma_barrier_phase_bit ^= 1;
-        // store d
-        asm volatile("tcgen05.ld.sync.aligned.16x256b.x1.b32 "
-                     "{%0, %1, %2, %3}, [%4];"
-                     : "=r"(d_frag[0]), "=r"(d_frag[1]), "=r"(d_frag[2]), "=r"(d_frag[3])
-                     : "r"(d_tmem_addr + ((warpid * 32) << 16)));
-        asm volatile("tcgen05.wait::ld.sync.aligned;");
-        for (i = 0; i < 4; i++)
-        {
-            row = warpid * 16 + i / 2 * 8 + laneid / 4;
-            col = laneid % 4 * 2 + i % 2;
-            d[row * N + col] = d_frag[i];
-        }
+        LOAD_D_M64N8();
         __syncthreads();
-        if (warpid == 0)
-        {
-            asm volatile(
-                "tcgen05.dealloc.cta_group::1.sync.aligned.b32 %0, 32;" : : "r"(d_tmem_addr));
-            asm volatile("tcgen05.relinquish_alloc_permit.cta_group::1.sync.aligned;");
-        }
+        i_desc |= 0; // f16_e4m3_e4m3
+        MMA("f8f6f4");
+        STORE_D_M64N8();
+        DEALLOC_TMEM();
     }
 
     void tcgen05mma_m64n8k32_f16_e5m2_e5m2(
