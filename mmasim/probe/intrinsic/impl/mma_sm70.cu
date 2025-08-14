@@ -6,7 +6,7 @@ extern "C" // fp16
         float *d, uint16_t *a, uint16_t *b, float *c)
     {
         const uint32_t N = 8, K = 4;
-        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t laneid = threadIdx.x;
         uint32_t a_frag[2], b_frag[2];
         float c_frag[8], d_frag[8];
 
@@ -31,7 +31,7 @@ extern "C" // fp16
         float *d, uint16_t *a, uint16_t *b, uint16_t *c)
     {
         const uint32_t N = 8, K = 4;
-        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t laneid = threadIdx.x;
         uint32_t a_frag[2], b_frag[2], c_frag[4];
         float d_frag[8];
 
@@ -55,7 +55,7 @@ extern "C" // fp16
         uint16_t *d, uint16_t *a, uint16_t *b, uint16_t *c)
     {
         const uint32_t N = 8, K = 4;
-        uint32_t row, col, i, laneid = threadIdx.x;
+        uint32_t laneid = threadIdx.x;
         uint32_t a_frag[2], b_frag[2];
         uint32_t c_frag[4], d_frag[4];
 

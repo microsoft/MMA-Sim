@@ -5,7 +5,7 @@ extern "C" // fp32
     __global__ void mfma_f32_32x32x2f32_kernel(float *d, float *a, float *b, float *c)
     {
         const uint32_t N = 32, K = 2;
-        uint32_t row, col, i, tid = threadIdx.x;
+        uint32_t tid = threadIdx.x;
         float a_frag, b_frag;
         float32x16 c_frag, d_frag;
 
@@ -19,7 +19,7 @@ extern "C" // fp32
     __global__ void mfma_f32_32x32x1f32_kernel(float *d, float *a, float *b, float *c)
     {
         const uint32_t N = 32, K = 1;
-        uint32_t row, col, i, tid = threadIdx.x;
+        uint32_t tid = threadIdx.x;
         float a_frag, b_frag;
         float32x32 c_frag, d_frag;
 
@@ -33,7 +33,7 @@ extern "C" // fp32
     __global__ void mfma_f32_16x16x4f32_kernel(float *d, float *a, float *b, float *c)
     {
         const uint32_t N = 16, K = 4;
-        uint32_t row, col, i, tid = threadIdx.x;
+        uint32_t tid = threadIdx.x;
         float a_frag, b_frag;
         float32x4 c_frag, d_frag;
 
@@ -47,7 +47,7 @@ extern "C" // fp32
     __global__ void mfma_f32_16x16x1f32_kernel(float *d, float *a, float *b, float *c)
     {
         const uint32_t N = 16, K = 1;
-        uint32_t row, col, i, tid = threadIdx.x;
+        uint32_t tid = threadIdx.x;
         float a_frag, b_frag;
         float32x16 c_frag, d_frag;
 
@@ -61,7 +61,7 @@ extern "C" // fp32
     __global__ void mfma_f32_4x4x1f32_kernel(float *d, float *a, float *b, float *c)
     {
         const uint32_t N = 4, K = 1;
-        uint32_t row, col, i, tid = threadIdx.x;
+        uint32_t tid = threadIdx.x;
         float a_frag, b_frag;
         float32x4 c_frag, d_frag;
 
@@ -103,7 +103,7 @@ extern "C" // fp16
     __global__ void mfma_f32_32x32x8f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
     {
         const uint32_t N = 32, K = 8;
-        uint32_t row, col, i, tid = threadIdx.x;
+        uint32_t tid = threadIdx.x;
         float16x4 a_frag, b_frag;
         float32x16 c_frag, d_frag;
 
@@ -117,7 +117,7 @@ extern "C" // fp16
     __global__ void mfma_f32_32x32x4f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
     {
         const uint32_t N = 32, K = 4;
-        uint32_t row, col, i, tid = threadIdx.x;
+        uint32_t tid = threadIdx.x;
         float16x4 a_frag, b_frag;
         float32x32 c_frag, d_frag;
 
@@ -131,7 +131,7 @@ extern "C" // fp16
     __global__ void mfma_f32_16x16x16f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
     {
         const uint32_t N = 16, K = 16;
-        uint32_t row, col, i, tid = threadIdx.x;
+        uint32_t tid = threadIdx.x;
         float16x4 a_frag, b_frag;
         float32x4 c_frag, d_frag;
 
@@ -145,7 +145,7 @@ extern "C" // fp16
     __global__ void mfma_f32_16x16x4f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
     {
         const uint32_t N = 16, K = 4;
-        uint32_t row, col, i, tid = threadIdx.x;
+        uint32_t tid = threadIdx.x;
         float16x4 a_frag, b_frag;
         float32x16 c_frag, d_frag;
 
@@ -159,7 +159,7 @@ extern "C" // fp16
     __global__ void mfma_f32_4x4x4f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
     {
         const uint32_t N = 4, K = 4;
-        uint32_t row, col, i, tid = threadIdx.x;
+        uint32_t tid = threadIdx.x;
         float16x4 a_frag, b_frag;
         float32x4 c_frag, d_frag;
 
@@ -201,7 +201,7 @@ extern "C" // bf16
     __global__ void mfma_f32_32x32x4bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
     {
         const uint32_t N = 32, K = 4;
-        uint32_t row, col, i, tid = threadIdx.x;
+        uint32_t tid = threadIdx.x;
         bfloat16x2 a_frag, b_frag;
         float32x16 c_frag, d_frag;
 
@@ -215,7 +215,7 @@ extern "C" // bf16
     __global__ void mfma_f32_32x32x2bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
     {
         const uint32_t N = 32, K = 2;
-        uint32_t row, col, i, tid = threadIdx.x;
+        uint32_t tid = threadIdx.x;
         bfloat16x2 a_frag, b_frag;
         float32x32 c_frag, d_frag;
 
@@ -229,7 +229,7 @@ extern "C" // bf16
     __global__ void mfma_f32_16x16x8bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
     {
         const uint32_t N = 16, K = 8;
-        uint32_t row, col, i, tid = threadIdx.x;
+        uint32_t tid = threadIdx.x;
         bfloat16x2 a_frag, b_frag;
         float32x4 c_frag, d_frag;
 
@@ -243,7 +243,7 @@ extern "C" // bf16
     __global__ void mfma_f32_16x16x2bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
     {
         const uint32_t N = 16, K = 2;
-        uint32_t row, col, i, tid = threadIdx.x;
+        uint32_t tid = threadIdx.x;
         bfloat16x2 a_frag, b_frag;
         float32x16 c_frag, d_frag;
 
@@ -257,7 +257,7 @@ extern "C" // bf16
     __global__ void mfma_f32_4x4x2bf16_kernel(float *d, int16_t *a, int16_t *b, float *c)
     {
         const uint32_t N = 4, K = 2;
-        uint32_t row, col, i, tid = threadIdx.x;
+        uint32_t tid = threadIdx.x;
         bfloat16x2 a_frag, b_frag;
         float32x4 c_frag, d_frag;
 

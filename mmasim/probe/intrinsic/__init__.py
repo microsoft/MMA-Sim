@@ -89,14 +89,17 @@ class NV_WGMMA(Intrinsic, NV_WGMMABase):
 
 
 class NV_TCGen05MMA(Intrinsic, NV_TCGen05MMABase):
-    def __init__(self, qualifier: str, intrinsic: Callable, block_scale: bool = False):
+    def __init__(self, qualifier: str, intrinsic: Callable):
         NV_TCGen05MMABase.__init__(self, qualifier)
         self.intrinsic = intrinsic
-        if block_scale:
-            raise NotImplementedError
 
     def __call__(
-        self, A: torch.Tensor, B: torch.Tensor, C: torch.Tensor
+        self,
+        A: torch.Tensor,
+        B: torch.Tensor,
+        C: torch.Tensor,
+        scale_A: torch.Tensor | None = None,
+        scale_B: torch.Tensor | None = None,
     ) -> torch.Tensor:
         m, n, k = self.m, self.n, self.k
         assert A.shape == (m, k)
@@ -112,7 +115,28 @@ class NV_TCGen05MMA(Intrinsic, NV_TCGen05MMABase):
         A = A.cuda()
         B = B.cuda()
         D = C.cuda()
-        self.intrinsic(D.data_ptr(), A.data_ptr(), B.data_ptr())
+        if self.kind.startswith("mx"):
+            assert scale_A is not None and scale_B is not None
+            assert scale_A.shape == (m, k // self.block_size)
+            assert scale_B.shape == (k // self.block_size, n)
+            assert scale_A.element_size() == 1
+            assert scale_B.element_size() == 1
+            assert scale_A.is_contiguous()
+            if not scale_B.T.is_contiguous():
+                # Ensure scale_B is column-major
+                scale_B = scale_B.T.contiguous().T
+            scale_A = scale_A.cuda()
+            scale_B = scale_B.cuda()
+            self.intrinsic(
+                D.data_ptr(),
+                A.data_ptr(),
+                B.data_ptr(),
+                scale_A.data_ptr(),
+                scale_B.data_ptr(),
+            )
+        else:
+            assert scale_A is None and scale_B is None
+            self.intrinsic(D.data_ptr(), A.data_ptr(), B.data_ptr())
         return D
 
     def dotadd(self, a: list[float], b: list[float], c: float = 0.0) -> float:
@@ -124,6 +148,33 @@ class NV_TCGen05MMA(Intrinsic, NV_TCGen05MMABase):
             B_T[0, i] = b[i]
         C[0, 0] = c
         D = self(A, B_T.T, C)
+        return D[0, 0].item()
+
+    def dotadd_with_block_scale(
+        self,
+        a: list[float],
+        b: list[float],
+        c: float,
+        scale_a: list[int],
+        scale_b: list[int],
+    ) -> float:
+        A = torch.zeros([self.m, self.k], dtype=self.a_type)
+        B_T = torch.zeros([self.n, self.k], dtype=self.b_type)
+        C = torch.zeros([self.m, self.n], dtype=self.c_type)
+        for i in range(len(a)):
+            A[0, i] = a[i]
+            B_T[0, i] = b[i]
+        C[0, 0] = c
+        scale_A = torch.full(
+            [self.m, self.k // self.block_size], 127, dtype=torch.uint8
+        )
+        scale_B_T = torch.full(
+            [self.n, self.k // self.block_size], 127, dtype=torch.uint8
+        )
+        for i in range(self.k // self.block_size):
+            scale_A[0, i] = scale_a[i] + 127
+            scale_B_T[0, i] = scale_b[i] + 127
+        D = self(A, B_T.T, C, scale_A, scale_B_T.T)
         return D[0, 0].item()
 
 

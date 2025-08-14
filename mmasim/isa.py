@@ -53,15 +53,19 @@ class NV_WGMMABase(MMAInstructionBase):
 
 
 class NV_TCGen05MMABase(MMAInstructionBase):
-    def __init__(self, qualifier: str, block_scale: bool = False):
-        shape, d_type, a_type, b_type = qualifier.split(".")
+    def __init__(self, qualifier: str):
+        qualifiers = qualifier.split(".")
+        if len(qualifiers) == 5:  # mma
+            kind, shape, d_type, a_type, b_type = qualifiers
+        else:  # block scale mma
+            kind, shape, d_type, a_type, b_type, block_size = qualifiers
+            self.block_size = int(block_size[-2:])
+        self.kind = kind
         self.m, self.n, self.k = nv_shape_to_mnk(shape)
         self.a_type = nv_torch_dtype[a_type]
         self.b_type = nv_torch_dtype[b_type]
         self.c_type = nv_torch_dtype[d_type]
         self.d_type = nv_torch_dtype[d_type]
-        if block_scale:
-            raise NotImplementedError
 
 
 amd_torch_dtype = {

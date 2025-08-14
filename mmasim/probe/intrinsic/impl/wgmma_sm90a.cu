@@ -7,7 +7,6 @@ extern "C" // tf32
     {
         const uint32_t M = 64, N = 8, K = 8;
         uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t row, col, i;
         uint64_t a_desc, b_desc;
         __shared__ uint32_t a_smem[M * K], b_smem[N * K];
         float d_frag[4];
@@ -41,7 +40,6 @@ extern "C" // fp16
     {
         const uint32_t M = 64, N = 8, K = 16;
         uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t row, col, i;
         uint64_t a_desc, b_desc;
         __shared__ uint16_t a_smem[M * K], b_smem[N * K];
         float d_frag[4];
@@ -66,7 +64,6 @@ extern "C" // fp16
     {
         const uint32_t M = 64, N = 8, K = 16;
         uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t row, col, i;
         uint64_t a_desc, b_desc;
         __shared__ uint16_t a_smem[M * K], b_smem[N * K];
         uint32_t d_frag[2];
@@ -106,7 +103,6 @@ extern "C" // bf16
     {
         const uint32_t M = 64, N = 8, K = 16;
         uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t row, col, i;
         uint64_t a_desc, b_desc;
         __shared__ uint16_t a_smem[M * K], b_smem[N * K];
         float d_frag[4];
@@ -141,7 +137,6 @@ extern "C" // fp8 m64n8k32 f32_output
     {
         const uint32_t M = 64, N = 8, K = 32;
         uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t row, col, i;
         uint64_t a_desc, b_desc;
         __shared__ uint8_t a_smem[M * K], b_smem[N * K];
         float d_frag[4];
@@ -166,7 +161,6 @@ extern "C" // fp8 m64n8k32 f32_output
     {
         const uint32_t M = 64, N = 8, K = 32;
         uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t row, col, i;
         uint64_t a_desc, b_desc;
         __shared__ uint8_t a_smem[M * K], b_smem[N * K];
         float d_frag[4];
@@ -191,7 +185,6 @@ extern "C" // fp8 m64n8k32 f32_output
     {
         const uint32_t M = 64, N = 8, K = 32;
         uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t row, col, i;
         uint64_t a_desc, b_desc;
         __shared__ uint8_t a_smem[M * K], b_smem[N * K];
         float d_frag[4];
@@ -218,7 +211,6 @@ extern "C" // fp8 m64n8k32 f32_output
     {
         const uint32_t M = 64, N = 8, K = 32;
         uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t row, col, i;
         uint64_t a_desc, b_desc;
         __shared__ uint8_t a_smem[M * K], b_smem[N * K];
         float d_frag[4];
@@ -271,7 +263,6 @@ extern "C" // fp8 m64n8k32 f16_output
     {
         const uint32_t M = 64, N = 8, K = 32;
         uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t row, col, i;
         uint64_t a_desc, b_desc;
         __shared__ uint8_t a_smem[M * K], b_smem[N * K];
         uint32_t d_frag[2];
@@ -296,7 +287,6 @@ extern "C" // fp8 m64n8k32 f16_output
     {
         const uint32_t M = 64, N = 8, K = 32;
         uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t row, col, i;
         uint64_t a_desc, b_desc;
         __shared__ uint8_t a_smem[M * K], b_smem[N * K];
         uint32_t d_frag[2];
@@ -321,7 +311,6 @@ extern "C" // fp8 m64n8k32 f16_output
     {
         const uint32_t M = 64, N = 8, K = 32;
         uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t row, col, i;
         uint64_t a_desc, b_desc;
         __shared__ uint8_t a_smem[M * K], b_smem[N * K];
         uint32_t d_frag[2];
@@ -346,7 +335,6 @@ extern "C" // fp8 m64n8k32 f16_output
     {
         const uint32_t M = 64, N = 8, K = 32;
         uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t row, col, i;
         uint64_t a_desc, b_desc;
         __shared__ uint8_t a_smem[M * K], b_smem[N * K];
         uint32_t d_frag[2];
