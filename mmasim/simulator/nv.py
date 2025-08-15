@@ -1,6 +1,6 @@
 import torch
 
-from .utils import truncate_to_tf32, nv_fused_dot_add
+from .functions import truncate_to_tf32, nv_fused_dot_add
 from ..isa import NV_MMABase, NV_WGMMABase, NV_TCGen05MMABase
 
 

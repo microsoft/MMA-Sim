@@ -1,6 +1,6 @@
 import torch
 
-from .utils import (
+from .functions import (
     fma,
     truncate_to_tf32,
     flush_denormal,

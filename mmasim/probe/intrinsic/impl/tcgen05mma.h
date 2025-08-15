@@ -134,6 +134,9 @@
         a_desc |= 1ll << 46;                                        \
     } while (0)
 
+// (16x2) tiles, each with (8x32) elements, equivalent to LOAD_A_M128K32_FP8()
+#define LOAD_A_M128K64_FP4() LOAD_A_M128K32_FP8()
+
 // (2x1) tiles, each with (4x8) elements
 #define LOAD_B_N8K8_TF32()                                      \
     do                                                          \
@@ -178,6 +181,9 @@
         b_desc |= desc_encode(256ll) << 32;                     \
         b_desc |= 1ll << 46;                                    \
     } while (0)
+
+// (2x1) tiles, each with (32x8) elements, equivalent to LOAD_B_N8K32_FP8()
+#define LOAD_B_N8K64_FP4() LOAD_B_N8K32_FP8()
 
 #define LOAD_D_M128N8()                                                                 \
     do                                                                                  \
@@ -262,7 +268,48 @@
         {                                                                                \
             for (uint32_t i = 0; i < 4; i++)                                             \
             {                                                                            \
-                sfa_frag[i] = sfa[i * 32 + laneid];                                      \
+                uint32_t row = i * 32 + laneid;                                          \
+                sfa_frag[i] = sfa[row];                                                  \
+            }                                                                            \
+            asm volatile("tcgen05.st.sync.aligned.32x32b.x4.b32 [%0], {%1, %2, %3, %4};" \
+                         :                                                               \
+                         : "r"(sfa_tmem_addr),                                           \
+                           "r"(sfa_frag[0]), "r"(sfa_frag[1]),                           \
+                           "r"(sfa_frag[2]), "r"(sfa_frag[3]));                          \
+            asm volatile("tcgen05.wait::st.sync.aligned;");                              \
+        }                                                                                \
+    } while (0)
+
+#define LOAD_SFA_M128SFK2()                                                              \
+    do                                                                                   \
+    {                                                                                    \
+        uint32_t sfa_frag[4];                                                            \
+        if (warpid == 0)                                                                 \
+        {                                                                                \
+            for (uint32_t i = 0; i < 4; i++)                                             \
+            {                                                                            \
+                uint32_t row = i * 32 + laneid;                                          \
+                sfa_frag[i] = *(uint16_t *)(sfa + row * 2);                              \
+            }                                                                            \
+            asm volatile("tcgen05.st.sync.aligned.32x32b.x4.b32 [%0], {%1, %2, %3, %4};" \
+                         :                                                               \
+                         : "r"(sfa_tmem_addr),                                           \
+                           "r"(sfa_frag[0]), "r"(sfa_frag[1]),                           \
+                           "r"(sfa_frag[2]), "r"(sfa_frag[3]));                          \
+            asm volatile("tcgen05.wait::st.sync.aligned;");                              \
+        }                                                                                \
+    } while (0)
+
+#define LOAD_SFA_M128SFK4()                                                              \
+    do                                                                                   \
+    {                                                                                    \
+        uint32_t sfa_frag[4];                                                            \
+        if (warpid == 0)                                                                 \
+        {                                                                                \
+            for (uint32_t i = 0; i < 4; i++)                                             \
+            {                                                                            \
+                uint32_t row = i * 32 + laneid;                                          \
+                sfa_frag[i] = *(uint32_t *)(sfa + row * 4);                              \
             }                                                                            \
             asm volatile("tcgen05.st.sync.aligned.32x32b.x4.b32 [%0], {%1, %2, %3, %4};" \
                          :                                                               \
@@ -279,7 +326,38 @@
         uint32_t sfb_frag[1];                                                \
         if (warpid == 0)                                                     \
         {                                                                    \
-            sfb_frag[0] = sfb[laneid % 8];                                   \
+            uint32_t col = laneid % 8;                                       \
+            sfb_frag[0] = sfb[col];                                          \
+            asm volatile("tcgen05.st.sync.aligned.32x32b.x1.b32 [%0], {%1};" \
+                         :                                                   \
+                         : "r"(sfb_tmem_addr), "r"(sfb_frag[0]));            \
+            asm volatile("tcgen05.wait::st.sync.aligned;");                  \
+        }                                                                    \
+    } while (0)
+
+#define LOAD_SFB_N8SFK2()                                                    \
+    do                                                                       \
+    {                                                                        \
+        uint32_t sfb_frag[1];                                                \
+        if (warpid == 0)                                                     \
+        {                                                                    \
+            uint32_t col = laneid % 8;                                       \
+            sfb_frag[0] = *(uint16_t *)(sfb + col * 2);                      \
+            asm volatile("tcgen05.st.sync.aligned.32x32b.x1.b32 [%0], {%1};" \
+                         :                                                   \
+                         : "r"(sfb_tmem_addr), "r"(sfb_frag[0]));            \
+            asm volatile("tcgen05.wait::st.sync.aligned;");                  \
+        }                                                                    \
+    } while (0)
+
+#define LOAD_SFB_N8SFK4()                                                    \
+    do                                                                       \
+    {                                                                        \
+        uint32_t sfb_frag[1];                                                \
+        if (warpid == 0)                                                     \
+        {                                                                    \
+            uint32_t col = laneid % 8;                                       \
+            sfb_frag[0] = *(uint32_t *)(sfb + col * 4);                      \
             asm volatile("tcgen05.st.sync.aligned.32x32b.x1.b32 [%0], {%1};" \
                          :                                                   \
                          : "r"(sfb_tmem_addr), "r"(sfb_frag[0]));            \

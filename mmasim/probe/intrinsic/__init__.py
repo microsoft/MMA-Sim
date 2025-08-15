@@ -2,7 +2,7 @@ from typing import Callable
 
 import torch
 
-from ...isa import MMAInstructionBase
+from ...isa import MMAInstructionBase, encode_fp4
 from ...isa import NV_MMABase, NV_WGMMABase, NV_TCGen05MMABase
 from ...isa import AMD_MFMABase
 
@@ -101,30 +101,32 @@ class NV_TCGen05MMA(Intrinsic, NV_TCGen05MMABase):
         scale_A: torch.Tensor | None = None,
         scale_B: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        m, n, k = self.m, self.n, self.k
-        assert A.shape == (m, k)
-        assert B.shape == (k, n)
+        m, n, k, packing = self.m, self.n, self.k, self.packing
+        assert A.is_contiguous() and C.is_contiguous()
+        if not B.T.is_contiguous():
+            if self.kind.startswith("mxf4"):
+                raise ValueError("B must be column-major for mxfp4")
+            # Ensure B is column-major
+            B = B.T.contiguous().T
+        assert A.shape == (m, k // packing)
+        assert B.shape == (k // packing, n)
         assert C.shape == (m, n)
         assert A.dtype == self.a_type
         assert B.dtype == self.b_type
         assert C.dtype == self.c_type
-        assert A.is_contiguous() and C.is_contiguous()
-        if not B.T.is_contiguous():
-            # Ensure B is column-major
-            B = B.T.contiguous().T
         A = A.cuda()
         B = B.cuda()
         D = C.cuda()
         if self.kind.startswith("mx"):
             assert scale_A is not None and scale_B is not None
-            assert scale_A.shape == (m, k // self.block_size)
-            assert scale_B.shape == (k // self.block_size, n)
-            assert scale_A.element_size() == 1
-            assert scale_B.element_size() == 1
             assert scale_A.is_contiguous()
             if not scale_B.T.is_contiguous():
                 # Ensure scale_B is column-major
                 scale_B = scale_B.T.contiguous().T
+            assert scale_A.shape == (m, k // self.block_size)
+            assert scale_B.shape == (k // self.block_size, n)
+            assert scale_A.dtype == self.s_type
+            assert scale_B.dtype == self.s_type
             scale_A = scale_A.cuda()
             scale_B = scale_B.cuda()
             self.intrinsic(
@@ -155,25 +157,27 @@ class NV_TCGen05MMA(Intrinsic, NV_TCGen05MMABase):
         a: list[float],
         b: list[float],
         c: float,
-        scale_a: list[int],
-        scale_b: list[int],
+        scale_a: list[float],
+        scale_b: list[float],
     ) -> float:
-        A = torch.zeros([self.m, self.k], dtype=self.a_type)
-        B_T = torch.zeros([self.n, self.k], dtype=self.b_type)
-        C = torch.zeros([self.m, self.n], dtype=self.c_type)
+        m, n, k = self.m, self.n, self.k
+        packing, block_size = self.packing, self.block_size
+        A = torch.zeros([m, k // packing], dtype=self.a_type)
+        B_T = torch.zeros([n, k // packing], dtype=self.b_type)
+        C = torch.zeros([m, n], dtype=self.c_type)
         for i in range(len(a)):
-            A[0, i] = a[i]
-            B_T[0, i] = b[i]
+            if packing == 1:
+                A[0, i] = a[i]
+                B_T[0, i] = b[i]
+            else:
+                A[0, i // packing] |= encode_fp4(a[i]) << (i % 2 * 4)
+                B_T[0, i // packing] |= encode_fp4(b[i]) << (i % 2 * 4)
         C[0, 0] = c
-        scale_A = torch.full(
-            [self.m, self.k // self.block_size], 127, dtype=torch.uint8
-        )
-        scale_B_T = torch.full(
-            [self.n, self.k // self.block_size], 127, dtype=torch.uint8
-        )
-        for i in range(self.k // self.block_size):
-            scale_A[0, i] = scale_a[i] + 127
-            scale_B_T[0, i] = scale_b[i] + 127
+        scale_A = torch.ones([m, k // block_size], dtype=self.s_type)
+        scale_B_T = torch.ones([n, k // block_size], dtype=self.s_type)
+        for i in range(k // block_size):
+            scale_A[0, i] = scale_a[i]
+            scale_B_T[0, i] = scale_b[i]
         D = self(A, B_T.T, C, scale_A, scale_B_T.T)
         return D[0, 0].item()
 

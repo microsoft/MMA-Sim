@@ -15,11 +15,23 @@ class MMAInstructionBase:
     ) -> torch.Tensor: ...
 
 
-def nv_shape_to_mnk(shape: str) -> tuple[int, int, int]:
-    mnk = shape.split("m")[1]
-    m, nk = mnk.split("n")
-    n, k = nk.split("k")
-    return int(m), int(n), int(k)
+def encode_fp4(x: float) -> int:
+    if x.hex() == "nan":
+        return 0b1000
+    encoding = {
+        0.0: 0b0000,
+        0.5: 0b0001,
+        1.0: 0b0010,
+        1.5: 0b0011,
+        2.0: 0b0100,
+        3.0: 0b0101,
+        4.0: 0b0110,
+        6.0: 0b0111,
+    }
+    if abs(x) in encoding:
+        return encoding[abs(x)] | (0b1000 if x < 0 else 0)
+    else:
+        raise ValueError(f"Unsupported value for fp4 encoding: {x}")
 
 
 nv_torch_dtype = {
@@ -29,7 +41,17 @@ nv_torch_dtype = {
     "bf16": torch.bfloat16,
     "e4m3": torch.float8_e4m3fn,
     "e5m2": torch.float8_e5m2,
+    "ue8m0": torch.float8_e8m0fnu,
+    "ue4m3": torch.float8_e4m3fn,
+    "e2m1": torch.uint8,  # torch.float4_e2m1fn_x2 is not well-implemented
 }
+
+
+def nv_shape_to_mnk(shape: str) -> tuple[int, int, int]:
+    mnk = shape.split("m")[1]
+    m, nk = mnk.split("n")
+    n, k = nk.split("k")
+    return int(m), int(n), int(k)
 
 
 class NV_MMABase(MMAInstructionBase):
@@ -58,10 +80,12 @@ class NV_TCGen05MMABase(MMAInstructionBase):
         if len(qualifiers) == 5:  # mma
             kind, shape, d_type, a_type, b_type = qualifiers
         else:  # block scale mma
-            kind, shape, d_type, a_type, b_type, block_size = qualifiers
+            kind, shape, block_size, d_type, a_type, b_type, s_type = qualifiers
             self.block_size = int(block_size[-2:])
+            self.s_type = nv_torch_dtype[s_type]
         self.kind = kind
         self.m, self.n, self.k = nv_shape_to_mnk(shape)
+        self.packing = 2 if kind.startswith("mxf4") else 1
         self.a_type = nv_torch_dtype[a_type]
         self.b_type = nv_torch_dtype[b_type]
         self.c_type = nv_torch_dtype[d_type]
