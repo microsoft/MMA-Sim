@@ -1,4 +1,4 @@
-from mmasim.probe.intrinsic.nv_turing import mma_intrinsics
+from mmasim.intrinsic.nv_turing import mma_intrinsics
 from mmasim.probe import ProbeFusedDotAdd, is_fused_dot_add
 
 

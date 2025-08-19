@@ -192,7 +192,7 @@ union float8x8
         {                                      \
             uint32_t row = tid / 32 * 8 + i;   \
             uint32_t col = tid % 32;           \
-            b_frag.part[i] = b[row * N + col]; \
+            b_frag.part[i] = b[col * K + row]; \
         }                                      \
     } while (0)
 
@@ -203,7 +203,7 @@ union float8x8
         {                                    \
             uint32_t row = tid / 32 * 4 + i; \
             uint32_t col = tid % 32;         \
-            b_frag[i] = b[row * N + col];    \
+            b_frag[i] = b[col * K + row];    \
         }                                    \
     } while (0)
 
@@ -214,7 +214,7 @@ union float8x8
         {                                    \
             uint32_t row = tid / 32 * 2 + i; \
             uint32_t col = tid % 32;         \
-            b_frag[i] = b[row * N + col];    \
+            b_frag[i] = b[col * K + row];    \
         }                                    \
     } while (0)
 
@@ -225,7 +225,7 @@ union float8x8
         {                                 \
             uint32_t row = i;             \
             uint32_t col = tid % 32;      \
-            b_frag[i] = b[row * N + col]; \
+            b_frag[i] = b[col * K + row]; \
         }                                 \
     } while (0)
 
@@ -234,7 +234,7 @@ union float8x8
     {                              \
         uint32_t row = tid / 32;   \
         uint32_t col = tid % 32;   \
-        b_frag = b[row * N + col]; \
+        b_frag = b[col * K + row]; \
     } while (0)
 
 #define LOAD_B_N32K2_2B()                 \
@@ -244,7 +244,7 @@ union float8x8
         {                                 \
             uint32_t row = i;             \
             uint32_t col = tid % 32;      \
-            b_frag[i] = b[row * N + col]; \
+            b_frag[i] = b[col * K + row]; \
         }                                 \
     } while (0)
 
@@ -253,7 +253,7 @@ union float8x8
     {                              \
         uint32_t row = 0;          \
         uint32_t col = tid % 32;   \
-        b_frag = b[row * N + col]; \
+        b_frag = b[col * K + row]; \
     } while (0)
 
 #define LOAD_B_N16K32()                        \
@@ -263,7 +263,7 @@ union float8x8
         {                                      \
             uint32_t row = tid / 16 * 8 + i;   \
             uint32_t col = tid % 16;           \
-            b_frag.part[i] = b[row * N + col]; \
+            b_frag.part[i] = b[col * K + row]; \
         }                                      \
     } while (0)
 
@@ -274,7 +274,7 @@ union float8x8
         {                                    \
             uint32_t row = tid / 16 * 4 + i; \
             uint32_t col = tid % 16;         \
-            b_frag[i] = b[row * N + col];    \
+            b_frag[i] = b[col * K + row];    \
         }                                    \
     } while (0)
 
@@ -285,7 +285,7 @@ union float8x8
         {                                    \
             uint32_t row = tid / 16 * 2 + i; \
             uint32_t col = tid % 16;         \
-            b_frag[i] = b[row * N + col];    \
+            b_frag[i] = b[col * K + row];    \
         }                                    \
     } while (0)
 
@@ -294,7 +294,7 @@ union float8x8
     {                              \
         uint32_t row = tid / 16;   \
         uint32_t col = tid % 16;   \
-        b_frag = b[row * N + col]; \
+        b_frag = b[col * K + row]; \
     } while (0)
 
 #define LOAD_B_N16K4_4B()                 \
@@ -304,7 +304,7 @@ union float8x8
         {                                 \
             uint32_t row = i;             \
             uint32_t col = tid % 16;      \
-            b_frag[i] = b[row * N + col]; \
+            b_frag[i] = b[col * K + row]; \
         }                                 \
     } while (0)
 
@@ -315,7 +315,7 @@ union float8x8
         {                                 \
             uint32_t row = i;             \
             uint32_t col = tid % 16;      \
-            b_frag[i] = b[row * N + col]; \
+            b_frag[i] = b[col * K + row]; \
         }                                 \
     } while (0)
 
@@ -324,7 +324,7 @@ union float8x8
     {                              \
         uint32_t row = 0;          \
         uint32_t col = tid % 16;   \
-        b_frag = b[row * N + col]; \
+        b_frag = b[col * K + row]; \
     } while (0)
 
 #define LOAD_B_N4K4_16B()                 \
@@ -334,7 +334,7 @@ union float8x8
         {                                 \
             uint32_t row = i;             \
             uint32_t col = tid % 4;       \
-            b_frag[i] = b[row * N + col]; \
+            b_frag[i] = b[col * K + row]; \
         }                                 \
     } while (0)
 
@@ -345,7 +345,7 @@ union float8x8
         {                                 \
             uint32_t row = i;             \
             uint32_t col = tid % 4;       \
-            b_frag[i] = b[row * N + col]; \
+            b_frag[i] = b[col * K + row]; \
         }                                 \
     } while (0)
 
@@ -354,7 +354,7 @@ union float8x8
     {                              \
         uint32_t row = 0;          \
         uint32_t col = tid % 4;    \
-        b_frag = b[row * N + col]; \
+        b_frag = b[col * K + row]; \
     } while (0)
 
 #define LOAD_C_M32N32()                                      \

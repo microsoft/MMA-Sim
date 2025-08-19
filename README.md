@@ -1,4 +1,4 @@
-# MMA-Sim: A Numerical Behavior Simulator for Matrix Multiplication Accelerators
+# MMA-Sim: A Bit-Accurate Behavior Simulator for Matrix Multiplication Accelerators
 
 MMA-Sim can simulate the matrix multiply-accumulate operation `D=A*B+C` and produce the outputs **bit-wise identical** with the outputs of [Tensor Cores](https://www.nvidia.com/en-us/data-center/tensor-cores/) and [Matrix Cores](https://rocm.docs.amd.com/en/latest/conceptual/gpu-arch/mi300.html).
 
@@ -61,7 +61,7 @@ Additional requirements:
 Additional builds:
 
 ```shell
-cd mmasim/probe/intrinsic/impl
+cd mmasim/intrinsic/impl
 make your_gpu_architecture.so
 cd -
 ```
@@ -76,7 +76,7 @@ amd_cdna1 amd_cdna2 amd_cdna3
 Example followup (assuming your GPU architecture is Ampere):
 
 ```python
-from mmasim.probe.intrinsic.nv_ampere import mma_intrinsics
+from mmasim.intrinsic.nv_ampere import mma_intrinsics
 intrinsic = mma_intrinsics["m16n8k16.f16.f16.f16.f16"]
 D_real = intrinsic(A, B, C)
 print(D_real)

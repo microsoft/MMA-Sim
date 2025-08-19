@@ -1,7 +1,7 @@
 import torch
 
 
-class MMAInstructionBase:
+class MatrixMultiplyAdd:
     m: int
     n: int
     k: int
@@ -14,9 +14,71 @@ class MMAInstructionBase:
         self, A: torch.Tensor, B: torch.Tensor, C: torch.Tensor
     ) -> torch.Tensor: ...
 
+    def dotadd(self, a: list[float], b: list[float], c: float) -> float:
+        A = torch.zeros([self.m, self.k], dtype=self.a_type)
+        B_T = torch.zeros([self.n, self.k], dtype=self.b_type)
+        C = torch.zeros([self.m, self.n], dtype=self.c_type)
+        for i in range(len(a)):
+            A[0, i] = a[i]
+            B_T[0, i] = b[i]
+        C[0, 0] = c
+        D = self(A, B_T.T, C)
+        return D[0, 0].item()
+
+
+class MatrixMultiplyAddWithBlockScale:
+    m: int
+    n: int
+    k: int
+    block_size: int
+    packing: int
+    a_type: torch.dtype
+    b_type: torch.dtype
+    c_type: torch.dtype
+    d_type: torch.dtype
+    s_type: torch.dtype
+
+    def __call__(
+        self,
+        A: torch.Tensor,
+        B: torch.Tensor,
+        C: torch.Tensor,
+        scale_A: torch.Tensor,
+        scale_B: torch.Tensor,
+    ) -> torch.Tensor: ...
+
+    def dotadd_with_block_scale(
+        self,
+        a: list[float],
+        b: list[float],
+        c: float,
+        scale_a: list[float],
+        scale_b: list[float],
+    ) -> float:
+        m, n, k = self.m, self.n, self.k
+        packing, block_size = self.packing, self.block_size
+        A = torch.zeros([m, k // packing], dtype=self.a_type)
+        B_T = torch.zeros([n, k // packing], dtype=self.b_type)
+        C = torch.zeros([m, n], dtype=self.c_type)
+        for i in range(len(a)):
+            if packing == 1:
+                A[0, i] = a[i]
+                B_T[0, i] = b[i]
+            else:
+                A[0, i // packing] |= encode_fp4(a[i]) << (i % 2 * 4)
+                B_T[0, i // packing] |= encode_fp4(b[i]) << (i % 2 * 4)
+        C[0, 0] = c
+        scale_A = torch.ones([m, k // block_size], dtype=self.s_type)
+        scale_B_T = torch.ones([n, k // block_size], dtype=self.s_type)
+        for i in range(k // block_size):
+            scale_A[0, i] = scale_a[i]
+            scale_B_T[0, i] = scale_b[i]
+        D = self(A, B_T.T, C, scale_A, scale_B_T.T)
+        return D[0, 0].item()
+
 
 def encode_fp4(x: float) -> int:
-    if x.hex() == "nan":
+    if x != x:  # nan
         return 0b1000
     encoding = {
         0.0: 0b0000,
@@ -52,44 +114,6 @@ def nv_shape_to_mnk(shape: str) -> tuple[int, int, int]:
     m, nk = mnk.split("n")
     n, k = nk.split("k")
     return int(m), int(n), int(k)
-
-
-class NV_MMABase(MMAInstructionBase):
-    def __init__(self, qualifier: str):
-        shape, d_type, a_type, b_type, c_type = qualifier.split(".")
-        self.m, self.n, self.k = nv_shape_to_mnk(shape)
-        self.a_type = nv_torch_dtype[a_type]
-        self.b_type = nv_torch_dtype[b_type]
-        self.c_type = nv_torch_dtype[c_type]
-        self.d_type = nv_torch_dtype[d_type]
-
-
-class NV_WGMMABase(MMAInstructionBase):
-    def __init__(self, qualifier: str):
-        shape, d_type, a_type, b_type = qualifier.split(".")
-        self.m, self.n, self.k = nv_shape_to_mnk(shape)
-        self.a_type = nv_torch_dtype[a_type]
-        self.b_type = nv_torch_dtype[b_type]
-        self.c_type = nv_torch_dtype[d_type]
-        self.d_type = nv_torch_dtype[d_type]
-
-
-class NV_TCGen05MMABase(MMAInstructionBase):
-    def __init__(self, qualifier: str):
-        qualifiers = qualifier.split(".")
-        if len(qualifiers) == 5:  # mma
-            kind, shape, d_type, a_type, b_type = qualifiers
-        else:  # block scale mma
-            kind, shape, block_size, d_type, a_type, b_type, s_type = qualifiers
-            self.block_size = int(block_size[-2:])
-            self.s_type = nv_torch_dtype[s_type]
-        self.kind = kind
-        self.m, self.n, self.k = nv_shape_to_mnk(shape)
-        self.packing = 2 if kind.startswith("mxf4") else 1
-        self.a_type = nv_torch_dtype[a_type]
-        self.b_type = nv_torch_dtype[b_type]
-        self.c_type = nv_torch_dtype[d_type]
-        self.d_type = nv_torch_dtype[d_type]
 
 
 amd_torch_dtype = {
@@ -139,13 +163,3 @@ def amd_parse_qualifier(
             b_type = a_type
     c_type = d_type
     return shape, d_type, a_type, b_type, c_type
-
-
-class AMD_MFMABase(MMAInstructionBase):
-    def __init__(self, qualifier: str):
-        shape, d_type, a_type, b_type, c_type = amd_parse_qualifier(qualifier)
-        self.m, self.n, self.k = map(int, shape.split("x"))
-        self.a_type = amd_torch_dtype[a_type]
-        self.b_type = amd_torch_dtype[b_type]
-        self.c_type = amd_torch_dtype[c_type]
-        self.d_type = amd_torch_dtype[d_type]

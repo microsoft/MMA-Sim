@@ -1,4 +1,4 @@
-from mmasim.probe.intrinsic.amd_cdna2 import mfma_intrinsics
+from mmasim.intrinsic.amd_cdna2 import mfma_intrinsics
 from mmasim.probe import is_pairwise_sum
 
 

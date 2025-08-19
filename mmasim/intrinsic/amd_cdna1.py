@@ -1,7 +1,7 @@
 import ctypes
 import pathlib
 
-from . import AMD_MFMA
+from . import MFMAIntrinsic
 
 
 path = pathlib.Path(__file__).parent / "impl/amd_cdna1.so"
@@ -47,6 +47,6 @@ mfma_intrinsic_impls = {
     "f32_4x4x2bf16": lib.mfma_f32_4x4x2bf16,
 }
 mfma_intrinsics = {
-    qualifier: AMD_MFMA(qualifier, mfma_intrinsic_impls[qualifier])
+    qualifier: MFMAIntrinsic("CDNA1", qualifier, mfma_intrinsic_impls[qualifier])
     for qualifier in mfma_intrinsic_impls
 }

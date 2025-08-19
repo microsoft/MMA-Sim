@@ -1,7 +1,7 @@
-from .intrinsic import Intrinsic
+from ..isa.common import MatrixMultiplyAdd
 
 
-def is_fused_dot_add(intrinsic: Intrinsic, group_size: int) -> bool:
+def is_fused_dot_add(intrinsic: MatrixMultiplyAdd, group_size: int) -> bool:
     # summation tree: (group_size+1)-way tree
     # c group_0
     # | ////

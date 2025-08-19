@@ -1,4 +1,4 @@
-from mmasim.probe.intrinsic.amd_cdna3 import mfma_intrinsics
+from mmasim.intrinsic.amd_cdna3 import mfma_intrinsics
 from mmasim.probe import ProbeFusedDotAdd, is_fused_dot_add, is_pairwise_sum
 
 

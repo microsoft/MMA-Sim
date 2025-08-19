@@ -1,11 +1,11 @@
-from mmasim.probe.intrinsic import NV_MMA
-from mmasim.probe.intrinsic.nv_hopper import mma_intrinsics, wgmma_intrinsics
+from mmasim.intrinsic import MMAIntrinsic
+from mmasim.intrinsic.nv_hopper import mma_intrinsics, wgmma_intrinsics
 from mmasim.probe import ProbeFusedDotAdd, is_fused_dot_add
 
 
 if __name__ == "__main__":
     for qualifier, intrinsic in (mma_intrinsics | wgmma_intrinsics).items():
-        if isinstance(intrinsic, NV_MMA):
+        if isinstance(intrinsic, MMAIntrinsic):
             print(f"Testing Hopper instruction mma.{qualifier}")
         else:
             print(f"Testing Hopper instruction wgmma.{qualifier}")

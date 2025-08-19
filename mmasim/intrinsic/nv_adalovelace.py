@@ -1,7 +1,7 @@
 import ctypes
 import pathlib
 
-from . import NV_MMA
+from . import MMAIntrinsic
 
 
 path = pathlib.Path(__file__).parent / "impl/nv_adalovelace.so"
@@ -75,6 +75,6 @@ mma_intrinsic_impls = {
     "m16n8k8.f16.f16.f16.f16": lib.mma_m16n8k8_f16_f16_f16_f16,
 }
 mma_intrinsics = {
-    qualifier: NV_MMA(qualifier, mma_intrinsic_impls[qualifier])
+    qualifier: MMAIntrinsic("Ada Lovelace", qualifier, mma_intrinsic_impls[qualifier])
     for qualifier in mma_intrinsic_impls
 }

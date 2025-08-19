@@ -285,7 +285,7 @@ extern "C" // mxfp8
         LOAD_SFB_N8SFK1();
         __syncthreads();
         i_desc |= (1 << 7) | (1 << 10) | (1 << 23); // e5m2_e5m2, ue8m0_scale
-        MMA_WITH_BLOCK_SCALE("mxf8f6f4", "block32");
+        MMA_WITH_BLOCK_SCALE("mxf8f6f4", "scale_vec::1X");
         STORE_D_M128N8();
         DEALLOC_TMEM(d_tmem_addr);
         DEALLOC_TMEM(sfa_tmem_addr);
@@ -316,7 +316,7 @@ extern "C" // mxfp8
         LOAD_SFB_N8SFK1();
         __syncthreads();
         i_desc |= 1 << 23; // e4m3_e4m3, ue8m0_scale
-        MMA_WITH_BLOCK_SCALE("mxf8f6f4", "block32");
+        MMA_WITH_BLOCK_SCALE("mxf8f6f4", "scale_vec::1X");
         STORE_D_M128N8();
         DEALLOC_TMEM(d_tmem_addr);
         DEALLOC_TMEM(sfa_tmem_addr);
@@ -362,7 +362,7 @@ extern "C" // mxfp4
         LOAD_SFB_N8SFK2();
         __syncthreads();
         i_desc |= (1 << 7) | (1 << 10) | (1 << 23); // e5m2_e5m2, ue8m0_scale
-        MMA_WITH_BLOCK_SCALE("mxf4nvf4", "block32");
+        MMA_WITH_BLOCK_SCALE("mxf4nvf4", "scale_vec::2X");
         STORE_D_M128N8();
         DEALLOC_TMEM(d_tmem_addr);
         DEALLOC_TMEM(sfa_tmem_addr);
@@ -393,7 +393,7 @@ extern "C" // mxfp4
         LOAD_SFB_N8SFK4();
         __syncthreads();
         i_desc |= (1 << 7) | (1 << 10) | (1 << 23); // e5m2_e5m2, ue8m0_scale
-        MMA_WITH_BLOCK_SCALE("mxf4nvf4", "block16");
+        MMA_WITH_BLOCK_SCALE("mxf4nvf4", "scale_vec::4X");
         STORE_D_M128N8();
         DEALLOC_TMEM(d_tmem_addr);
         DEALLOC_TMEM(sfa_tmem_addr);
@@ -424,7 +424,7 @@ extern "C" // mxfp4
         LOAD_SFB_N8SFK4();
         __syncthreads();
         i_desc |= (1 << 7) | (1 << 10); // e5m2_e5m2, ue4m3_scale
-        MMA_WITH_BLOCK_SCALE("mxf4nvf4", "block16");
+        MMA_WITH_BLOCK_SCALE("mxf4nvf4", "scale_vec::4X");
         STORE_D_M128N8();
         DEALLOC_TMEM(d_tmem_addr);
         DEALLOC_TMEM(sfa_tmem_addr);

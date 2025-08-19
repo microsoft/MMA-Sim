@@ -1,7 +1,7 @@
 import ctypes
 import pathlib
 
-from . import NV_MMA
+from . import MMAIntrinsic
 
 
 path = pathlib.Path(__file__).parent / "impl/nv_volta.so"
@@ -19,6 +19,6 @@ mma_intrinsic_impls = {
     "m8n8k4.f16.f16.f16.f16": lib.mma_m8n8k4_f16_f16_f16_f16,
 }
 mma_intrinsics = {
-    qualifier: NV_MMA(qualifier, mma_intrinsic_impls[qualifier])
+    qualifier: MMAIntrinsic("Volta", qualifier, mma_intrinsic_impls[qualifier])
     for qualifier in mma_intrinsic_impls
 }

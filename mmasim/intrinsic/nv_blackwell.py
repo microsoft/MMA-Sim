@@ -1,7 +1,7 @@
 import ctypes
 import pathlib
 
-from . import NV_MMA, NV_TCGen05MMA
+from . import MMAIntrinsic, TCGen05MMAIntrinsic
 
 
 path = pathlib.Path(__file__).parent / "impl/nv_blackwell.so"
@@ -86,10 +86,10 @@ mma_intrinsic_impls = {
     "m16n8k8.f16.f16.f16.f16": lib.mma_m16n8k8_f16_f16_f16_f16,
 }
 tcgen05mma_intrinsics = {
-    qualifier: NV_TCGen05MMA(qualifier, tcgen05mma_intrinsic_impls[qualifier])
+    qualifier: TCGen05MMAIntrinsic("Blackwell", qualifier, tcgen05mma_intrinsic_impls[qualifier])
     for qualifier in tcgen05mma_intrinsic_impls
 }
 mma_intrinsics = {
-    qualifier: NV_MMA(qualifier, mma_intrinsic_impls[qualifier])
+    qualifier: MMAIntrinsic("Blackwell", qualifier, mma_intrinsic_impls[qualifier])
     for qualifier in mma_intrinsic_impls
 }

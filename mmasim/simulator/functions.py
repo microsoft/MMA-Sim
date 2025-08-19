@@ -21,10 +21,34 @@ def truncate_to_tf32(x: torch.Tensor) -> torch.Tensor:
     return x.view(torch.float32)
 
 
+def unpack_fp4_tensor(packed: torch.Tensor) -> torch.Tensor:
+    n = packed.numel()
+    low = packed & 0x0F
+    high = packed >> 4
+    unpacked = torch.zeros(n * 2, dtype=torch.float32)
+    decoding = {
+        0b0000: 0.0,
+        0b0001: 0.5,
+        0b0010: 1.0,
+        0b0011: 1.5,
+        0b0100: 2.0,
+        0b0101: 3.0,
+        0b0110: 4.0,
+        0b0111: 6.0,
+    }
+    decoding |= {x + 0b1000: -y for x, y in decoding.items()}
+    decoding[0b1000] = float("nan")
+    for i in range(n):
+        unpacked[i * 2] = decoding[int(low[i].item())]
+        unpacked[i * 2 + 1] = decoding[int(high[i].item())]
+    return unpacked
+
+
 dtype_min_exponent = {
     torch.float32: -126,
     torch.float16: -14,
     torch.bfloat16: -126,
+    torch.float8_e8m0fnu: -127,
     torch.float8_e5m2: -14,
     torch.float8_e4m3fn: -6,
     torch.float8_e5m2fnuz: -15,
@@ -81,7 +105,7 @@ def pairwise_dot(
 
 def fused_sum(
     significands: list[float], exponents: list[int], n_fraction_bits: int
-) -> tuple[float, float]:
+) -> tuple[float, int]:
     max_exponent = max(exponents)
     significand_sum = 0.0
     for i in range(len(significands)):
@@ -95,37 +119,59 @@ def fused_sum(
     return significand_sum, max_exponent
 
 
-def nv_fused_dot_add(
+def fused_dot_add(
     a: torch.Tensor,
     b: torch.Tensor,
     c: torch.Tensor,
     n_fraction_bits: int,
-    output_type: str,
-) -> torch.Tensor:
-    products = a.double() * b.double()
+    scale_a: torch.Tensor,
+    scale_b: torch.Tensor,
+) -> tuple[float, int]:
+    # check nan or inf
+    products = a.double() * b.double() * scale_a * scale_b
     fp64_sum = products.sum() + c.double()
+    if torch.isnan(fp64_sum).any() or torch.isinf(fp64_sum).any():
+        return fp64_sum.item(), 0
 
-    # nan
-    if torch.isnan(fp64_sum).any():
-        # NVIDIA encodes nan as 0x7fff ffff
-        x = torch.tensor(0x7FFF_FFFF, dtype=torch.uint32)
-        return x.view(torch.float32)
-    # inf
-    if torch.isinf(fp64_sum).any():
-        return fp64_sum
-
-    # finite numbers
     sc, ec = extract_significand_exponent(c)
+    _, esa = extract_significand_exponent(scale_a)
+    _, esb = extract_significand_exponent(scale_b)
     significands = [sc]
     exponents = [ec]
     for i in range(products.numel()):
         sa, ea = extract_significand_exponent(a[i])
         sb, eb = extract_significand_exponent(b[i])
         significands.append(sa * sb)
-        exponents.append(ea + eb)
-    s, e = fused_sum(significands, exponents, n_fraction_bits)
+        exponents.append(ea + eb + esa + esb)
+    return fused_sum(significands, exponents, n_fraction_bits)
+
+
+def nv_fused_dot_add(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    c: torch.Tensor,
+    n_fraction_bits: int,
+    output_type: str,
+    scale_a: torch.Tensor | None = None,
+    scale_b: torch.Tensor | None = None,
+) -> torch.Tensor:
+    if scale_a is None or scale_b is None:
+        scale_a = torch.tensor(1.0)
+        scale_b = torch.tensor(1.0)
+    s, e = fused_dot_add(a, b, c, n_fraction_bits, scale_a, scale_b)
+    if s != s:  # nan
+        if output_type == "f16":
+            return torch.tensor(0x7FFF, dtype=torch.uint16).view(torch.float16)
+        else:
+            return torch.tensor(0x7FFF_FFFF, dtype=torch.uint32).view(torch.float32)
+    if s + 1 == s:  # inf
+        return torch.tensor(
+            s, dtype=torch.float16 if output_type == "f16" else torch.float32
+        )
+
+    # normalize output
     if output_type == "f16":
-        # note that direcctly converting f64 to f16 may be incorrect
+        # note that direcctly converting f64 to f16 can be incorrect
         # as PyTorch-CPU computes f64 -> f32 -> f16 internally
         s, e = extract_significand_exponent(s * 2.0**e, dtype=torch.float16)
         s = round(s * 2.0**10) * 2.0**-10  # RNE
@@ -135,6 +181,48 @@ def nv_fused_dot_add(
         n_fraction_bits = 13 if output_type == "f32_e8m13" else 23
         s = math.trunc(s * 2.0**n_fraction_bits) * 2.0**-n_fraction_bits  # RZ
         return torch.tensor(s * 2.0**e, dtype=torch.float32)
+
+
+def nv_fused_dot_add_with_block_scale(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    c: torch.Tensor,
+    scale_a: torch.Tensor,
+    scale_b: torch.Tensor,
+    n_fraction_bits: int,
+) -> torch.Tensor:
+    if scale_a.dtype == torch.float8_e4m3fn:  # ue4m3
+        scale_a = scale_a.abs()
+        scale_b = scale_b.abs()
+    n = a.numel()
+    block_size = n // scale_a.numel()
+    # check nan
+    fp64_a = a.view(n // block_size, block_size).double() * scale_a.view(-1, 1).double()
+    fp64_b = b.view(n // block_size, block_size).double() * scale_b.view(-1, 1).double()
+    fp64_sum = (fp64_a * fp64_b).flatten().sum() + c.double()
+    if torch.isnan(fp64_sum).any():
+        return torch.tensor(0x7FFF_FFFF, dtype=torch.uint32).view(torch.float32)
+
+    sc, ec = extract_significand_exponent(c)
+    significands = [sc]
+    exponents = [ec]
+    for k in range(0, a.numel(), 16):
+        s, e = fused_dot_add(
+            a[k : k + 16],
+            b[k : k + 16],
+            torch.tensor(0.0),
+            n_fraction_bits,
+            scale_a[k // block_size],
+            scale_b[k // block_size],
+        )
+        if s != 0.0:
+            s, e = extract_significand_exponent(s * 2.0**e)
+        significands.append(s)
+        exponents.append(e)
+    s, e = fused_sum(significands, exponents, n_fraction_bits)
+    s, e = extract_significand_exponent(s * 2.0**e, dtype=torch.float32)
+    s = math.trunc(s * 2.0**23) * 2.0**-23  # RZ
+    return torch.tensor(s * 2.0**e, dtype=torch.float32)
 
 
 def amd_fused_dot_add(

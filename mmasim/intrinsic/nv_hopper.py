@@ -1,7 +1,7 @@
 import ctypes
 import pathlib
 
-from . import NV_MMA, NV_WGMMA
+from . import MMAIntrinsic, WGMMAIntrinsic
 
 
 path = pathlib.Path(__file__).parent / "impl/nv_hopper.so"
@@ -71,10 +71,10 @@ mma_intrinsic_impls = {
     "m16n8k8.f16.f16.f16.f16": lib.mma_m16n8k8_f16_f16_f16_f16,
 }
 wgmma_intrinsics = {
-    qualifier: NV_WGMMA(qualifier, wgmma_intrinsic_impls[qualifier])
+    qualifier: WGMMAIntrinsic("Hopper", qualifier, wgmma_intrinsic_impls[qualifier])
     for qualifier in wgmma_intrinsic_impls
 }
 mma_intrinsics = {
-    qualifier: NV_MMA(qualifier, mma_intrinsic_impls[qualifier])
+    qualifier: MMAIntrinsic("Hopper", qualifier, mma_intrinsic_impls[qualifier])
     for qualifier in mma_intrinsic_impls
 }
