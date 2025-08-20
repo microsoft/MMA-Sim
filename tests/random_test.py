@@ -16,8 +16,11 @@ def random_test(
     b_type = sim.b_type
     c_type = sim.c_type
     d_type = sim.d_type
-    has_block_scale = isinstance(sim, MatrixMultiplyAddWithBlockScale)
-    packing = sim.packing if has_block_scale else 1
+    has_block_scale = False
+    packing = 1
+    if isinstance(sim, MatrixMultiplyAddWithBlockScale):
+        has_block_scale = sim.block_size > 0
+        packing = sim.packing
     scale_A = scale_B = torch.tensor(1.0)  # type hinting
     s_type = torch.float8_e8m0fnu
     for _ in range(trials):
@@ -38,6 +41,7 @@ def random_test(
             0, 256**c_type.itemsize, (m, n), dtype=storage_type[c_type.itemsize]
         ).view(c_type)
         if has_block_scale:
+            assert isinstance(sim, MatrixMultiplyAddWithBlockScale)
             assert isinstance(real, MatrixMultiplyAddWithBlockScale)
             s_type, block_size = sim.s_type, sim.block_size
             scale_A = torch.randint(
@@ -56,6 +60,7 @@ def random_test(
             D_sim = sim(A, B, C, scale_A, scale_B)
             D_real = real(A, B, C, scale_A, scale_B).cpu()
         else:
+            assert isinstance(sim, MatrixMultiplyAdd)
             assert isinstance(real, MatrixMultiplyAdd)
             D_sim = sim(A, B, C)
             D_real = real(A, B, C).cpu()

@@ -70,7 +70,7 @@ class MatrixMultiplyAddWithBlockScale:
         C[0, 0] = c
         scale_A = torch.ones([m, k // block_size], dtype=self.s_type)
         scale_B_T = torch.ones([n, k // block_size], dtype=self.s_type)
-        for i in range(k // block_size):
+        for i in range(len(scale_a)):
             scale_A[0, i] = scale_a[i]
             scale_B_T[0, i] = scale_b[i]
         D = self(A, B_T.T, C, scale_A, scale_B_T.T)
@@ -78,7 +78,7 @@ class MatrixMultiplyAddWithBlockScale:
 
 
 def encode_fp4(x: float) -> int:
-    if x != x:  # nan
+    if x.hex() == "-0x0.0p+0":  # -0.0
         return 0b1000
     encoding = {
         0.0: 0b0000,

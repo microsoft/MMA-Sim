@@ -361,7 +361,7 @@ extern "C" // mxfp4
         LOAD_SFA_M128SFK2();
         LOAD_SFB_N8SFK2();
         __syncthreads();
-        i_desc |= (1 << 7) | (1 << 10) | (1 << 23); // e5m2_e5m2, ue8m0_scale
+        i_desc |= (1 << 7) | (1 << 10) | (1 << 23); // e2m1, ue8m0_scale
         MMA_WITH_BLOCK_SCALE("mxf4nvf4", "scale_vec::2X");
         STORE_D_M128N8();
         DEALLOC_TMEM(d_tmem_addr);
@@ -392,7 +392,7 @@ extern "C" // mxfp4
         LOAD_SFA_M128SFK4();
         LOAD_SFB_N8SFK4();
         __syncthreads();
-        i_desc |= (1 << 7) | (1 << 10) | (1 << 23); // e5m2_e5m2, ue8m0_scale
+        i_desc |= (1 << 7) | (1 << 10) | (1 << 23); // e2m1, ue8m0_scale
         MMA_WITH_BLOCK_SCALE("mxf4nvf4", "scale_vec::4X");
         STORE_D_M128N8();
         DEALLOC_TMEM(d_tmem_addr);
@@ -423,7 +423,7 @@ extern "C" // mxfp4
         LOAD_SFA_M128SFK4();
         LOAD_SFB_N8SFK4();
         __syncthreads();
-        i_desc |= (1 << 7) | (1 << 10); // e5m2_e5m2, ue4m3_scale
+        i_desc |= (1 << 7) | (1 << 10); // e2m1, ue4m3_scale
         MMA_WITH_BLOCK_SCALE("mxf4nvf4", "scale_vec::4X");
         STORE_D_M128N8();
         DEALLOC_TMEM(d_tmem_addr);

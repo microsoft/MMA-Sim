@@ -35,6 +35,8 @@ class TCGen05MMA(MatrixMultiplyAdd, MatrixMultiplyAddWithBlockScale):
                 assert a_type in ["e5m2", "e4m3"]  # TODO: support e3m2, e2m3, and e2m1
                 assert b_type in ["e5m2", "e4m3"]
                 assert d_type in ["f32", "f16"]
+            self.block_size = 0
+            self.s_type = torch.float32
         else:  # with block scale
             assert len(qualifiers) == 7
             kind, shape, block_size, d_type, a_type, b_type, s_type = qualifiers

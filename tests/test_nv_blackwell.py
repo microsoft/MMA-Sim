@@ -13,9 +13,9 @@ if __name__ == "__main__":
             trials=100,
         )
     for qualifier, intrinsic in tcgen05mma_intrinsics.items():
-        print(f"Testing Hopper instruction tcgen05.mma.{qualifier}")
+        print(f"Testing Blackwell instruction tcgen05.mma.{qualifier}")
         random_test(
-            TCGen05MMASim("Hopper", qualifier),
+            TCGen05MMASim("Blackwell", qualifier),
             intrinsic,
             allow_different_nan=False,
             trials=100,
