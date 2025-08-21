@@ -30,8 +30,8 @@ nv_hopper.so: wgmma_sm90a.cu mma_sm80.cu mma_sm75.cu wgmma.h mma.h
 nv_blackwell.so: tcgen05mma_sm100a.cu mma_sm80.cu mma_sm75.cu tcgen05mma.h mma.h
 	$(NVCC) $(NVCCFLAGS) -arch=compute_100a -code=sm_100a -o $@ $^
 
-nv_rtxblackwell.so: mma_sm89.cu mma_sm80.cu mma_sm75.cu mma.h
-	$(NVCC) $(NVCCFLAGS) -arch=compute_120 -code=sm_120 -o $@ $^
+nv_rtxblackwell.so: mma_sm120a.cu mma_sm89.cu mma_sm80.cu mma_sm75.cu mma.h
+	$(NVCC) $(NVCCFLAGS) -arch=compute_120a -code=sm_120a -o $@ $^
 
 # Build all AMD targets
 all_amd: $(AMDTARGETS)

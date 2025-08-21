@@ -192,7 +192,7 @@ def nv_fused_dot_add_with_block_scale(
     scale_b: torch.Tensor,
     n_fraction_bits: int,
 ) -> torch.Tensor:
-    if torch.isnan(scale_a).any() or torch.isnan(scale_b).any():
+    if torch.isnan(scale_a).any() or torch.isnan(scale_b).any() or torch.isnan(c).any():
         return torch.tensor(0x7FFF_FFFF, dtype=torch.uint32).view(torch.float32)
     if scale_a.dtype == torch.float8_e4m3fn:  # ue4m3
         scale_a = scale_a.abs()

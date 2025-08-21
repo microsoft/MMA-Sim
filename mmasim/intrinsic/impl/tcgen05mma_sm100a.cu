@@ -339,6 +339,37 @@ extern "C" // mxfp8
 
 extern "C" // mxfp4
 {
+    __global__ void tcgen05mma_mxf4_m128n8k64_block32_f32_e2m1_e2m1_ue8m0_kernel(
+        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
+    {
+        const uint32_t M = 128, N = 8, K = 64;
+        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
+        uint32_t i_desc = (N >> 3 << 17) | (M >> 7 << 27), mma_barrier_phase_bit = 0;
+        uint64_t a_desc, b_desc;
+        __shared__ uint8_t a_smem[M * K / 2], b_smem[N * K / 2];
+        __shared__ uint32_t d_tmem_addr, sfa_tmem_addr, sfb_tmem_addr;
+        __shared__ uint64_t mma_barrier;
+
+        INIT_MBARRIER();
+        LOAD_A_M128K64_FP4();
+        LOAD_B_N8K64_FP4();
+        ALLOC_TMEM(d_tmem_addr);
+        ALLOC_TMEM(sfa_tmem_addr);
+        ALLOC_TMEM(sfb_tmem_addr);
+        __syncthreads();
+        LOAD_D_M128N8();
+        LOAD_SFA_M128SFK2();
+        LOAD_SFB_N8SFK2();
+        __syncthreads();
+        i_desc |= (1 << 7) | (1 << 10) | (1 << 23); // e2m1, ue8m0_scale
+        MMA_WITH_BLOCK_SCALE("mxf4", "scale_vec::2X");
+        STORE_D_M128N8();
+        DEALLOC_TMEM(d_tmem_addr);
+        DEALLOC_TMEM(sfa_tmem_addr);
+        DEALLOC_TMEM(sfb_tmem_addr);
+        RELINQUISH_TMEM();
+    }
+
     __global__ void tcgen05mma_mxf4nvf4_m128n8k64_block32_f32_e2m1_e2m1_ue8m0_kernel(
         uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
     {
@@ -430,6 +461,12 @@ extern "C" // mxfp4
         DEALLOC_TMEM(sfa_tmem_addr);
         DEALLOC_TMEM(sfb_tmem_addr);
         RELINQUISH_TMEM();
+    }
+
+    void tcgen05mma_mxf4_m128n8k64_block32_f32_e2m1_e2m1_ue8m0(
+        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
+    {
+        tcgen05mma_mxf4_m128n8k64_block32_f32_e2m1_e2m1_ue8m0_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
     }
 
     void tcgen05mma_mxf4nvf4_m128n8k64_block32_f32_e2m1_e2m1_ue8m0(

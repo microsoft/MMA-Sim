@@ -128,7 +128,7 @@ extern "C" // fp8 m16n8k16 f32_output
     __global__ void mma_m16n8k16_f32_e5m2_e5m2_f32_kernel(
         float *d, uint8_t *a, uint8_t *b, float *c)
     {
-        const uint32_t N = 8, K = 32;
+        const uint32_t N = 8, K = 16;
         uint32_t laneid = threadIdx.x;
         uint32_t a_frag[2], b_frag[1];
         float c_frag[4], d_frag[4];
@@ -152,7 +152,7 @@ extern "C" // fp8 m16n8k16 f32_output
     __global__ void mma_m16n8k16_f32_e5m2_e4m3_f32_kernel(
         float *d, uint8_t *a, uint8_t *b, float *c)
     {
-        const uint32_t N = 8, K = 32;
+        const uint32_t N = 8, K = 16;
         uint32_t laneid = threadIdx.x;
         uint32_t a_frag[2], b_frag[1];
         float c_frag[4], d_frag[4];
@@ -176,7 +176,7 @@ extern "C" // fp8 m16n8k16 f32_output
     __global__ void mma_m16n8k16_f32_e4m3_e5m2_f32_kernel(
         float *d, uint8_t *a, uint8_t *b, float *c)
     {
-        const uint32_t N = 8, K = 32;
+        const uint32_t N = 8, K = 16;
         uint32_t laneid = threadIdx.x;
         uint32_t a_frag[2], b_frag[1];
         float c_frag[4], d_frag[4];
@@ -200,7 +200,7 @@ extern "C" // fp8 m16n8k16 f32_output
     __global__ void mma_m16n8k16_f32_e4m3_e4m3_f32_kernel(
         float *d, uint8_t *a, uint8_t *b, float *c)
     {
-        const uint32_t N = 8, K = 32;
+        const uint32_t N = 8, K = 16;
         uint32_t laneid = threadIdx.x;
         uint32_t a_frag[2], b_frag[1];
         float c_frag[4], d_frag[4];
@@ -374,7 +374,7 @@ extern "C" // fp8 m16n8k16 f16_output
     __global__ void mma_m16n8k16_f16_e5m2_e5m2_f16_kernel(
         uint16_t *d, uint8_t *a, uint8_t *b, uint16_t *c)
     {
-        const uint32_t N = 8, K = 32;
+        const uint32_t N = 8, K = 16;
         uint32_t laneid = threadIdx.x;
         uint32_t a_frag[2], b_frag[1];
         uint32_t c_frag[2], d_frag[2];
@@ -398,7 +398,7 @@ extern "C" // fp8 m16n8k16 f16_output
     __global__ void mma_m16n8k16_f16_e5m2_e4m3_f16_kernel(
         uint16_t *d, uint8_t *a, uint8_t *b, uint16_t *c)
     {
-        const uint32_t N = 8, K = 32;
+        const uint32_t N = 8, K = 16;
         uint32_t laneid = threadIdx.x;
         uint32_t a_frag[2], b_frag[1];
         uint32_t c_frag[2], d_frag[2];
@@ -422,7 +422,7 @@ extern "C" // fp8 m16n8k16 f16_output
     __global__ void mma_m16n8k16_f16_e4m3_e5m2_f16_kernel(
         uint16_t *d, uint8_t *a, uint8_t *b, uint16_t *c)
     {
-        const uint32_t N = 8, K = 32;
+        const uint32_t N = 8, K = 16;
         uint32_t laneid = threadIdx.x;
         uint32_t a_frag[2], b_frag[1];
         uint32_t c_frag[2], d_frag[2];
@@ -446,7 +446,7 @@ extern "C" // fp8 m16n8k16 f16_output
     __global__ void mma_m16n8k16_f16_e4m3_e4m3_f16_kernel(
         uint16_t *d, uint8_t *a, uint8_t *b, uint16_t *c)
     {
-        const uint32_t N = 8, K = 32;
+        const uint32_t N = 8, K = 16;
         uint32_t laneid = threadIdx.x;
         uint32_t a_frag[2], b_frag[1];
         uint32_t c_frag[2], d_frag[2];

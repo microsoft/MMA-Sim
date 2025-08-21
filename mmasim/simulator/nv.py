@@ -49,6 +49,9 @@ class MMASim(MMA):
         MMA.__init__(self, arch, qualifier)
         self.n_accum_fraction_bits = arch_accum_fraction_bits[arch]
         self.output_type = "f32" if self.d_type == torch.float32 else "f16"
+        # special cases
+        if self.block_size > 0 and self.kind.startswith("mxf4"):
+            self.n_accum_fraction_bits = 35
         if self.arch == "Ada Lovelace" and self.a_type in [
             torch.float8_e5m2,
             torch.float8_e4m3fn,
@@ -56,13 +59,17 @@ class MMASim(MMA):
             self.n_accum_fraction_bits = 13
             if self.output_type == "f32":
                 self.output_type = "f32_e8m13"
-
         self.is_split_k = is_split_k(arch, qualifier)
 
     def __call__(
-        self, A: torch.Tensor, B: torch.Tensor, C: torch.Tensor
+        self,
+        A: torch.Tensor,
+        B: torch.Tensor,
+        C: torch.Tensor,
+        scale_A: torch.Tensor | None = None,
+        scale_B: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        self.check_input(A, B, C)
+        self.check_input(A, B, C, scale_A, scale_B)
         A = A.cpu()
         B = B.cpu()
         C = C.cpu()
@@ -74,29 +81,53 @@ class MMASim(MMA):
         for i in range(m):
             for j in range(n):
                 sum = C[i, j]
-                if self.is_split_k:
-                    sum = nv_fused_dot_add(
-                        A[i, : k // 2],
-                        B[: k // 2, j],
-                        sum,
-                        n_fraction_bits=self.n_accum_fraction_bits,
-                        output_type=self.output_type,
-                    )
-                    sum = nv_fused_dot_add(
-                        A[i, k // 2 : k],
-                        B[k // 2 : k, j],
-                        sum,
-                        n_fraction_bits=self.n_accum_fraction_bits,
-                        output_type=self.output_type,
-                    )
-                else:
-                    sum = nv_fused_dot_add(
-                        A[i, :],
-                        B[:, j],
-                        sum,
-                        n_fraction_bits=self.n_accum_fraction_bits,
-                        output_type=self.output_type,
-                    )
+                if self.block_size > 0:
+                    assert scale_A is not None and scale_B is not None
+                    if self.kind.startswith("mxf8"):
+                        sum = nv_fused_dot_add(
+                            A[i, :],
+                            B[:, j],
+                            sum,
+                            self.n_accum_fraction_bits,
+                            self.output_type,
+                            scale_A[i, 0],
+                            scale_B[0, j],
+                        )
+                    else:  # mxf4
+                        a = unpack_fp4_tensor(A[i, :])
+                        b = unpack_fp4_tensor(B[:, j])
+                        sum = nv_fused_dot_add_with_block_scale(
+                            a,
+                            b,
+                            sum,
+                            scale_A[i, :],
+                            scale_B[:, j],
+                            self.n_accum_fraction_bits,
+                        )
+                else:  # without block scale
+                    if self.is_split_k:
+                        sum = nv_fused_dot_add(
+                            A[i, : k // 2],
+                            B[: k // 2, j],
+                            sum,
+                            n_fraction_bits=self.n_accum_fraction_bits,
+                            output_type=self.output_type,
+                        )
+                        sum = nv_fused_dot_add(
+                            A[i, k // 2 : k],
+                            B[k // 2 : k, j],
+                            sum,
+                            n_fraction_bits=self.n_accum_fraction_bits,
+                            output_type=self.output_type,
+                        )
+                    else:
+                        sum = nv_fused_dot_add(
+                            A[i, :],
+                            B[:, j],
+                            sum,
+                            n_fraction_bits=self.n_accum_fraction_bits,
+                            output_type=self.output_type,
+                        )
                 D[i][j] = sum
         return D
 
@@ -166,7 +197,7 @@ class TCGen05MMASim(TCGen05MMA):
         for i in range(m):
             for j in range(n):
                 sum = C[i, j]
-                if self.kind.startswith("mx"):
+                if self.block_size > 0:
                     assert scale_A is not None and scale_B is not None
                     if self.kind.startswith("mxf8"):
                         sum = nv_fused_dot_add(
@@ -189,7 +220,7 @@ class TCGen05MMASim(TCGen05MMA):
                             scale_B[:, j],
                             self.n_accum_fraction_bits,
                         )
-                else:
+                else:  # without block scale
                     sum = nv_fused_dot_add(
                         A[i, :],
                         B[:, j],

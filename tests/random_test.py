@@ -21,8 +21,6 @@ def random_test(
     if isinstance(sim, MatrixMultiplyAddWithBlockScale):
         has_block_scale = sim.block_size > 0
         packing = sim.packing
-    scale_A = scale_B = torch.tensor(1.0)  # type hinting
-    s_type = torch.float8_e8m0fnu
     for _ in range(trials):
         A = torch.randint(
             0,
@@ -80,9 +78,9 @@ def random_test(
             print(f"    C_raw[i, j] = {C[i, j].view(storage_type[c_type.itemsize])}")
             if has_block_scale:
                 print(
-                    f"    scale_A[i, :] = {scale_A[i, :].view(storage_type[s_type.itemsize])}"
+                    f"    scale_A[i, :] = {scale_A[i, :].view(storage_type[s_type.itemsize])}"  # type: ignore
                 )
                 print(
-                    f"    scale_B[:, j] = {scale_B[:, j].view(storage_type[s_type.itemsize])}"
+                    f"    scale_B[:, j] = {scale_B[:, j].view(storage_type[s_type.itemsize])}"  # type: ignore
                 )
             raise Exception("Test failed")

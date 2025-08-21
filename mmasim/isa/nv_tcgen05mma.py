@@ -36,7 +36,7 @@ class TCGen05MMA(MatrixMultiplyAdd, MatrixMultiplyAddWithBlockScale):
                 assert b_type in ["e5m2", "e4m3"]
                 assert d_type in ["f32", "f16"]
             self.block_size = 0
-            self.s_type = torch.float32
+            self.packing = 1
         else:  # with block scale
             assert len(qualifiers) == 7
             kind, shape, block_size, d_type, a_type, b_type, s_type = qualifiers
@@ -67,12 +67,12 @@ class TCGen05MMA(MatrixMultiplyAdd, MatrixMultiplyAddWithBlockScale):
                     s_type == "ue8m0" and block_size == "block32"
                 )
             self.block_size = int(block_size[-2:])
+            self.packing = 2 if kind.startswith("mxf4") else 1
             self.s_type = nv_torch_dtype[s_type]
         self.arch = arch
         self.qualifier = qualifier
         self.m, self.n, self.k = m, n, k
         self.kind = kind
-        self.packing = 2 if kind.startswith("mxf4") else 1
         self.a_type = nv_torch_dtype[a_type]
         self.b_type = nv_torch_dtype[b_type]
         self.c_type = nv_torch_dtype[d_type]
@@ -93,7 +93,7 @@ class TCGen05MMA(MatrixMultiplyAdd, MatrixMultiplyAddWithBlockScale):
         assert A.dtype == self.a_type
         assert B.dtype == self.b_type
         assert C.dtype == self.c_type
-        if self.kind.startswith("mx"):
+        if self.block_size > 0:
             assert scale_A is not None and scale_B is not None
             assert scale_A.shape == (m, k // self.block_size)
             assert scale_B.shape == (k // self.block_size, n)
