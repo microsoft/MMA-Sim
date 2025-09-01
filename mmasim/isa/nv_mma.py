@@ -19,6 +19,8 @@ turing_mma_qualifiers = [
     "m16n8k8.f16.f16.f16.f16",
 ]
 ampere_mma_qualifiers = [
+    # sm_80 f64
+    "m8n8k4.f64.f64.f64.f64",
     # sm_80 tf32
     "m16n8k4.f32.tf32.tf32.f32",
     "m16n8k8.f32.tf32.tf32.f32",
@@ -51,6 +53,12 @@ adalovelace_mma_qualifiers = [
     "m16n8k16.f16.e4m3.e5m2.f16",
     "m16n8k16.f16.e4m3.e4m3.f16",
 ]
+hopper_mma_qualifiers = [
+    # sm_90 f64
+    "m16n8k16.f64.f64.f64.f64",
+    "m16n8k8.f64.f64.f64.f64",
+    "m16n8k4.f64.f64.f64.f64",
+]
 
 arch_mma_qualifiers = {
     "Volta": volta_mma_qualifiers,
@@ -59,7 +67,7 @@ arch_mma_qualifiers = {
     "Ada Lovelace": adalovelace_mma_qualifiers
     + ampere_mma_qualifiers
     + turing_mma_qualifiers,
-    "Hopper": ampere_mma_qualifiers + turing_mma_qualifiers,
+    "Hopper": hopper_mma_qualifiers + ampere_mma_qualifiers + turing_mma_qualifiers,
     "Blackwell": ampere_mma_qualifiers + turing_mma_qualifiers,
     "RTX Blackwell": adalovelace_mma_qualifiers
     + ampere_mma_qualifiers

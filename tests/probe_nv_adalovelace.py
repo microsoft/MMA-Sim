@@ -9,7 +9,7 @@ if __name__ == "__main__":
         if "tf32" in qualifier:  # tf32
             if intrinsic.k == 8:
                 gsz = 4
-        elif "bf16" in qualifier or "f16.f16" in qualifier:  # bf16 or fp16
+        elif "bf16" in qualifier or "f16.f16" in qualifier:  # bf16 or f16
             if intrinsic.k == 16:
                 gsz = 8
         else:  # fp8

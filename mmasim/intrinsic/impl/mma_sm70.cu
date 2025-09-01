@@ -1,6 +1,6 @@
 #include "mma.h"
 
-extern "C" // fp16
+extern "C" // f16
 {
     __global__ void mma_m8n8k4_f32_f16_f16_f32_kernel(
         float *d, uint16_t *a, uint16_t *b, float *c)

@@ -1,5 +1,6 @@
 #include <hip/hip_runtime.h>
 
+using float64x4 = __attribute__((__vector_size__(4 * sizeof(double)))) double;
 using float32x2 = __attribute__((__vector_size__(2 * sizeof(float)))) float;
 using float32x4 = __attribute__((__vector_size__(4 * sizeof(float)))) float;
 using float32x16 = __attribute__((__vector_size__(16 * sizeof(float)))) float;
@@ -164,6 +165,14 @@ union float8x8
             uint32_t col = i;             \
             a_frag[i] = a[row * K + col]; \
         }                                 \
+    } while (0)
+
+#define LOAD_A_M4K4_4B()           \
+    do                             \
+    {                              \
+        uint32_t row = tid % 4;    \
+        uint32_t col = tid / 16;   \
+        a_frag = a[row * K + col]; \
     } while (0)
 
 #define LOAD_A_M4K2_16B()                 \
@@ -338,6 +347,14 @@ union float8x8
         }                                 \
     } while (0)
 
+#define LOAD_B_N4K4_4B()           \
+    do                             \
+    {                              \
+        uint32_t row = tid / 16;   \
+        uint32_t col = tid % 4;    \
+        b_frag = b[col * K + row]; \
+    } while (0)
+
 #define LOAD_B_N4K2_16B()                 \
     do                                    \
     {                                     \
@@ -379,6 +396,17 @@ union float8x8
         }                                                         \
     } while (0)
 
+#define LOAD_C_M16N16_F64()                  \
+    do                                       \
+    {                                        \
+        for (uint32_t i = 0; i < 4; i++)     \
+        {                                    \
+            uint32_t row = i * 4 + tid / 16; \
+            uint32_t col = tid % 16;         \
+            c_frag[i] = c[row * N + col];    \
+        }                                    \
+    } while (0)
+
 #define LOAD_C_M16N16()                      \
     do                                       \
     {                                        \
@@ -412,6 +440,14 @@ union float8x8
         }                                 \
     } while (0)
 
+#define LOAD_C_M4N4_4B()           \
+    do                             \
+    {                              \
+        uint32_t row = tid / 16;   \
+        uint32_t col = tid % 4;    \
+        c_frag = c[row * N + col]; \
+    } while (0)
+
 #define STORE_D_M32N32()                                     \
     do                                                       \
     {                                                        \
@@ -432,6 +468,17 @@ union float8x8
             uint32_t col = tid % 32;                              \
             d[row * N + col] = d_frag[i];                         \
         }                                                         \
+    } while (0)
+
+#define STORE_D_M16N16_F64()                 \
+    do                                       \
+    {                                        \
+        for (uint32_t i = 0; i < 4; i++)     \
+        {                                    \
+            uint32_t row = i * 4 + tid / 16; \
+            uint32_t col = tid % 16;         \
+            d[row * N + col] = d_frag[i];    \
+        }                                    \
     } while (0)
 
 #define STORE_D_M16N16()                     \
@@ -465,4 +512,12 @@ union float8x8
             uint32_t col = tid % 4;       \
             d[row * N + col] = d_frag[i]; \
         }                                 \
+    } while (0)
+
+#define STORE_D_M4N4_4B()          \
+    do                             \
+    {                              \
+        uint32_t row = tid / 16;   \
+        uint32_t col = tid % 4;    \
+        d[row * N + col] = d_frag; \
     } while (0)

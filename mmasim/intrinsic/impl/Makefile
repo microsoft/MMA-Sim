@@ -24,7 +24,7 @@ nv_ampere.so: mma_sm80.cu mma_sm75.cu mma.h
 nv_adalovelace.so: mma_sm89.cu mma_sm80.cu mma_sm75.cu mma.h
 	$(NVCC) $(NVCCFLAGS) -arch=compute_89 -code=sm_89 -o $@ $^
 
-nv_hopper.so: wgmma_sm90a.cu mma_sm80.cu mma_sm75.cu wgmma.h mma.h
+nv_hopper.so: wgmma_sm90a.cu mma_sm90.cu mma_sm80.cu mma_sm75.cu wgmma.h mma.h
 	$(NVCC) $(NVCCFLAGS) -arch=compute_90a -code=sm_90a -o $@ $^
 
 nv_blackwell.so: tcgen05mma_sm100a.cu mma_sm80.cu mma_sm75.cu tcgen05mma.h mma.h

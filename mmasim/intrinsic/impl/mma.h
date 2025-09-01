@@ -1,5 +1,46 @@
 #include <stdint.h>
 
+#define LOAD_A_M16K16_F64()                        \
+    do                                             \
+    {                                              \
+        for (uint32_t i = 0; i < 8; i++)           \
+        {                                          \
+            uint32_t row = i % 2 * 8 + laneid / 4; \
+            uint32_t col = i / 2 * 4 + laneid % 4; \
+            a_frag[i] = a[row * K + col];          \
+        }                                          \
+    } while (0)
+
+#define LOAD_A_M16K8_F64()                         \
+    do                                             \
+    {                                              \
+        for (uint32_t i = 0; i < 4; i++)           \
+        {                                          \
+            uint32_t row = i % 2 * 8 + laneid / 4; \
+            uint32_t col = i / 2 * 4 + laneid % 4; \
+            a_frag[i] = a[row * K + col];          \
+        }                                          \
+    } while (0)
+
+#define LOAD_A_M16K4_F64()                     \
+    do                                         \
+    {                                          \
+        for (uint32_t i = 0; i < 2; i++)       \
+        {                                      \
+            uint32_t row = i * 8 + laneid / 4; \
+            uint32_t col = laneid % 4;         \
+            a_frag[i] = a[row * K + col];      \
+        }                                      \
+    } while (0)
+
+#define LOAD_A_M8K4_F64()             \
+    do                                \
+    {                                 \
+        uint32_t row = laneid / 4;    \
+        uint32_t col = laneid % 4;    \
+        a_frag[0] = a[row * K + col]; \
+    } while (0)
+
 #define LOAD_A_M16K8_TF32()                               \
     do                                                    \
     {                                                     \
@@ -88,6 +129,36 @@
         }                                                             \
     } while (0)
 
+#define LOAD_B_N8K16_F64()                     \
+    do                                         \
+    {                                          \
+        for (uint32_t i = 0; i < 4; i++)       \
+        {                                      \
+            uint32_t row = i * 4 + laneid % 4; \
+            uint32_t col = laneid / 4;         \
+            b_frag[i] = b[col * K + row];      \
+        }                                      \
+    } while (0)
+
+#define LOAD_B_N8K8_F64()                      \
+    do                                         \
+    {                                          \
+        for (uint32_t i = 0; i < 2; i++)       \
+        {                                      \
+            uint32_t row = laneid % 4 * 2 + i; \
+            uint32_t col = laneid / 4;         \
+            b_frag[i] = b[col * K + row];      \
+        }                                      \
+    } while (0)
+
+#define LOAD_B_N8K4_F64()             \
+    do                                \
+    {                                 \
+        uint32_t row = laneid % 4;    \
+        uint32_t col = laneid / 4;    \
+        b_frag[0] = b[col * K + row]; \
+    } while (0)
+
 #define LOAD_B_N8K8_TF32()                                \
     do                                                    \
     {                                                     \
@@ -165,6 +236,28 @@
             uint32_t col = laneid / 4;                                \
             b_frag[i / 8] = *(uint32_t *)(b + col * K / 2 + row / 2); \
         }                                                             \
+    } while (0)
+
+#define LOAD_C_M16N8_F64()                         \
+    do                                             \
+    {                                              \
+        for (uint32_t i = 0; i < 4; i++)           \
+        {                                          \
+            uint32_t row = i / 2 * 8 + laneid / 4; \
+            uint32_t col = laneid % 4 * 2 + i;     \
+            c_frag[i] = c[row * N + col];          \
+        }                                          \
+    } while (0)
+
+#define LOAD_C_M8N8_F64()                      \
+    do                                         \
+    {                                          \
+        for (uint32_t i = 0; i < 2; i++)       \
+        {                                      \
+            uint32_t row = laneid / 4;         \
+            uint32_t col = laneid % 4 * 2 + i; \
+            c_frag[i] = c[row * N + col];      \
+        }                                      \
     } while (0)
 
 #define LOAD_C_M16N8_F32()                         \
@@ -251,6 +344,28 @@
     {                                            \
         uint32_t col = laneid / 4;               \
         sfb_frag = *(uint32_t *)(sfb + col * 4); \
+    } while (0)
+
+#define STORE_D_M16N8_F64()                        \
+    do                                             \
+    {                                              \
+        for (uint32_t i = 0; i < 4; i++)           \
+        {                                          \
+            uint32_t row = i / 2 * 8 + laneid / 4; \
+            uint32_t col = laneid % 4 * 2 + i;     \
+            d[row * N + col] = d_frag[i];          \
+        }                                          \
+    } while (0)
+
+#define STORE_D_M8N8_F64()                     \
+    do                                         \
+    {                                          \
+        for (uint32_t i = 0; i < 2; i++)       \
+        {                                      \
+            uint32_t row = laneid / 4;         \
+            uint32_t col = laneid % 4 * 2 + i; \
+            d[row * N + col] = d_frag[i];      \
+        }                                      \
     } while (0)
 
 #define STORE_D_M16N8_F32()                        \

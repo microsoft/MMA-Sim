@@ -33,7 +33,7 @@ extern "C" // tf32
     }
 }
 
-extern "C" // fp16
+extern "C" // f16
 {
     __global__ void wgmma_m64n8k16_f32_f16_f16_kernel(
         float *d, uint16_t *a, uint16_t *b)

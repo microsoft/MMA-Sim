@@ -1,6 +1,6 @@
 #include "mfma.h"
 
-extern "C" // fp32
+extern "C" // f32
 {
     __global__ void mfma_f32_32x32x2f32_kernel(float *d, float *a, float *b, float *c)
     {
@@ -98,7 +98,7 @@ extern "C" // fp32
     }
 }
 
-extern "C" // fp16
+extern "C" // f16
 {
     __global__ void mfma_f32_32x32x8f16_kernel(float *d, _Float16 *a, _Float16 *b, float *c)
     {

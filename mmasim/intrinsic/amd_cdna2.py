@@ -7,6 +7,9 @@ from . import MFMAIntrinsic
 path = pathlib.Path(__file__).parent / "impl/amd_cdna2.so"
 lib = ctypes.CDLL(str(path))
 
+# cdna2 f64
+lib.mfma_f64_16x16x4f64.argtypes = [ctypes.c_void_p] * 4
+lib.mfma_f64_4x4x4f64.argtypes = [ctypes.c_void_p] * 4
 # cdna2 bf16
 lib.mfma_f32_32x32x8bf16_1k.argtypes = [ctypes.c_void_p] * 4
 lib.mfma_f32_32x32x4bf16_1k.argtypes = [ctypes.c_void_p] * 4
@@ -33,6 +36,9 @@ lib.mfma_f32_16x16x2bf16.argtypes = [ctypes.c_void_p] * 4
 lib.mfma_f32_4x4x2bf16.argtypes = [ctypes.c_void_p] * 4
 
 mfma_intrinsic_impls = {
+    # cdna2 f64
+    "f64_16x16x4f64": lib.mfma_f64_16x16x4f64,
+    "f64_4x4x4f64": lib.mfma_f64_4x4x4f64,
     # cdna2 bf16
     "f32_32x32x8bf16_1k": lib.mfma_f32_32x32x8bf16_1k,
     "f32_32x32x4bf16_1k": lib.mfma_f32_32x32x4bf16_1k,

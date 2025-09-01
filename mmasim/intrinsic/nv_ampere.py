@@ -7,6 +7,8 @@ from . import MMAIntrinsic
 path = pathlib.Path(__file__).parent / "impl/nv_ampere.so"
 lib = ctypes.CDLL(str(path))
 
+# sm_80 f64
+lib.mma_m8n8k4_f64_f64_f64_f64.argtypes = [ctypes.c_void_p] * 4
 # sm_80 tf32
 lib.mma_m16n8k8_f32_tf32_tf32_f32.argtypes = [ctypes.c_void_p] * 4
 lib.mma_m16n8k4_f32_tf32_tf32_f32.argtypes = [ctypes.c_void_p] * 4
@@ -21,6 +23,8 @@ lib.mma_m16n8k8_f32_f16_f16_f32.argtypes = [ctypes.c_void_p] * 4
 lib.mma_m16n8k8_f16_f16_f16_f16.argtypes = [ctypes.c_void_p] * 4
 
 mma_intrinsic_impls = {
+    # sm_80 f64
+    "m8n8k4.f64.f64.f64.f64": lib.mma_m8n8k4_f64_f64_f64_f64,
     # sm_80 tf32
     "m16n8k8.f32.tf32.tf32.f32": lib.mma_m16n8k8_f32_tf32_tf32_f32,
     "m16n8k4.f32.tf32.tf32.f32": lib.mma_m16n8k4_f32_tf32_tf32_f32,

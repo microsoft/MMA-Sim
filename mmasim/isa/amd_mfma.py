@@ -23,6 +23,9 @@ cdna1_mfma_qualifiers = [
     "f32_4x4x2bf16",
 ]
 cdna2_mfma_qualifiers = [
+    # cdna2 f64
+    "f64_16x16x4f64",
+    "f64_4x4x4f64",
     # cdna2 bf16
     "f32_32x32x8bf16_1k",
     "f32_32x32x4bf16_1k",
@@ -31,6 +34,9 @@ cdna2_mfma_qualifiers = [
     "f32_4x4x4bf16_1k",
 ]
 cdna3_mfma_qualifiers = [
+    # f64
+    "f64_16x16x4_f64",
+    "f64_4x4x4_4b_f64",
     # f32
     "f32_32x32x1_2b_f32",
     "f32_16x16x1_4b_f32",

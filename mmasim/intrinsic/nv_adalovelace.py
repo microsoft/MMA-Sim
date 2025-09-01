@@ -27,6 +27,8 @@ lib.mma_m16n8k16_f16_e5m2_e5m2_f16.argtypes = [ctypes.c_void_p] * 4
 lib.mma_m16n8k16_f16_e5m2_e4m3_f16.argtypes = [ctypes.c_void_p] * 4
 lib.mma_m16n8k16_f16_e4m3_e5m2_f16.argtypes = [ctypes.c_void_p] * 4
 lib.mma_m16n8k16_f16_e4m3_e4m3_f16.argtypes = [ctypes.c_void_p] * 4
+# sm_80 f64
+lib.mma_m8n8k4_f64_f64_f64_f64.argtypes = [ctypes.c_void_p] * 4
 # sm_80 tf32
 lib.mma_m16n8k8_f32_tf32_tf32_f32.argtypes = [ctypes.c_void_p] * 4
 lib.mma_m16n8k4_f32_tf32_tf32_f32.argtypes = [ctypes.c_void_p] * 4
@@ -61,6 +63,8 @@ mma_intrinsic_impls = {
     "m16n8k16.f16.e5m2.e4m3.f16": lib.mma_m16n8k16_f16_e5m2_e4m3_f16,
     "m16n8k16.f16.e4m3.e5m2.f16": lib.mma_m16n8k16_f16_e4m3_e5m2_f16,
     "m16n8k16.f16.e4m3.e4m3.f16": lib.mma_m16n8k16_f16_e4m3_e4m3_f16,
+    # sm_80 f64
+    "m8n8k4.f64.f64.f64.f64": lib.mma_m8n8k4_f64_f64_f64_f64,
     # sm_80 tf32
     "m16n8k8.f32.tf32.tf32.f32": lib.mma_m16n8k8_f32_tf32_tf32_f32,
     "m16n8k4.f32.tf32.tf32.f32": lib.mma_m16n8k4_f32_tf32_tf32_f32,

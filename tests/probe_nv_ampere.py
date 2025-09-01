@@ -9,7 +9,7 @@ if __name__ == "__main__":
         if "tf32" in qualifier:  # tf32
             if intrinsic.k == 8:
                 gsz = 4
-        else:  # fp16 or bf16
+        else:  # f16 or bf16
             if intrinsic.k == 16:
                 gsz = 8
         assert is_fused_dot_add(intrinsic, gsz)

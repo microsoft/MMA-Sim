@@ -97,6 +97,7 @@ def encode_fp4(x: float) -> int:
 
 
 nv_torch_dtype = {
+    "f64": torch.float64,
     "f32": torch.float32,
     "tf32": torch.float32,
     "f16": torch.float16,
@@ -117,6 +118,7 @@ def nv_shape_to_mnk(shape: str) -> tuple[int, int, int]:
 
 
 amd_torch_dtype = {
+    "f64": torch.float64,
     "f32": torch.float32,
     "xf32": torch.float32,
     "f16": torch.float16,

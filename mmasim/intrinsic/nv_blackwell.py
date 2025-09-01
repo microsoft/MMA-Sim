@@ -39,6 +39,8 @@ lib.tcgen05mma_mxf4nvf4_m128n8k64_block16_f32_e2m1_e2m1_ue8m0.argtypes = [
 lib.tcgen05mma_mxf4nvf4_m128n8k64_block16_f32_e2m1_e2m1_ue4m3.argtypes = [
     ctypes.c_void_p
 ] * 5
+# sm_80 f64
+lib.mma_m8n8k4_f64_f64_f64_f64.argtypes = [ctypes.c_void_p] * 4
 # sm_80 tf32
 lib.mma_m16n8k8_f32_tf32_tf32_f32.argtypes = [ctypes.c_void_p] * 4
 lib.mma_m16n8k4_f32_tf32_tf32_f32.argtypes = [ctypes.c_void_p] * 4
@@ -76,6 +78,8 @@ tcgen05mma_intrinsic_impls = {
     "mxf4nvf4.m128n8k64.block16.f32.e2m1.e2m1.ue4m3": lib.tcgen05mma_mxf4nvf4_m128n8k64_block16_f32_e2m1_e2m1_ue4m3,
 }
 mma_intrinsic_impls = {
+    # sm_80 f64
+    "m8n8k4.f64.f64.f64.f64": lib.mma_m8n8k4_f64_f64_f64_f64,
     # sm_80 tf32
     "m16n8k8.f32.tf32.tf32.f32": lib.mma_m16n8k8_f32_tf32_tf32_f32,
     "m16n8k4.f32.tf32.tf32.f32": lib.mma_m16n8k4_f32_tf32_tf32_f32,

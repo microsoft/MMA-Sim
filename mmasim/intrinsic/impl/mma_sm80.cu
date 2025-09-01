@@ -1,5 +1,33 @@
 #include "mma.h"
 
+extern "C" // f64
+{
+    __global__ void mma_m8n8k4_f64_f64_f64_f64_kernel(
+        double *d, double *a, double *b, double *c)
+    {
+        const uint32_t N = 8, K = 4;
+        uint32_t laneid = threadIdx.x;
+        double a_frag[1], b_frag[1];
+        double c_frag[2], d_frag[2];
+
+        LOAD_A_M8K4_F64();
+        LOAD_B_N8K4_F64();
+        LOAD_C_M8N8_F64();
+        asm volatile(
+            "mma.sync.aligned.m8n8k4.row.col.f64.f64.f64.f64 "
+            "{%0, %1}, {%2}, {%3}, {%4, %5};"
+            : "=d"(d_frag[0]), "=d"(d_frag[1])
+            : "d"(a_frag[0]), "d"(b_frag[0]), "d"(c_frag[0]), "d"(c_frag[1]));
+        STORE_D_M8N8_F64();
+    }
+
+    void mma_m8n8k4_f64_f64_f64_f64(
+        double *d, double *a, double *b, double *c)
+    {
+        mma_m8n8k4_f64_f64_f64_f64_kernel<<<1, 32>>>(d, a, b, c);
+    }
+}
+
 extern "C" // tf32
 {
     __global__ void mma_m16n8k8_f32_tf32_tf32_f32_kernel(
@@ -64,7 +92,7 @@ extern "C" // tf32
     }
 }
 
-extern "C" // fp16
+extern "C" // f16
 {
     __global__ void mma_m16n8k16_f32_f16_f16_f32_kernel(
         float *d, uint16_t *a, uint16_t *b, float *c)
