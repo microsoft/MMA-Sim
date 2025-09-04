@@ -89,7 +89,7 @@ class MFMASim(MFMA):
                             A[i, l : l + self.group_size],
                             B[l : l + self.group_size, j],
                             sum,
-                            n_fraction_bits=24,
+                            n_fractional_bits=24,
                             is_fp8=self.qualifier.endswith("8"),
                         )
                         sum = torch.tensor(fused_sum, dtype=self.d_type)  # RNE

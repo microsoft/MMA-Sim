@@ -9,7 +9,7 @@ if __name__ == "__main__":
         random_test(
             MMASim("Hopper", qualifier),
             intrinsic,
-            allow_different_nan=False,
+            allow_different_nan=qualifier.endswith("f64"),
             trials=100,
         )
     for qualifier, intrinsic in wgmma_intrinsics.items():

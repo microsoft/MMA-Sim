@@ -9,7 +9,7 @@ if __name__ == "__main__":
         random_test(
             MMASim("Ampere", qualifier),
             intrinsic,
-            allow_different_nan=False,
+            allow_different_nan=qualifier.endswith("f64"),
             trials=100,
         )
     print("Tests passed!")

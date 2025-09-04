@@ -6,12 +6,20 @@ import torch
 libm = ctypes.CDLL("libm.so.6")
 libm.fmaf.argtypes = [ctypes.c_float] * 3
 libm.fmaf.restype = ctypes.c_float
+libm.fma.argtypes = [ctypes.c_double] * 3
+libm.fma.restype = ctypes.c_double
 
 
 def fma(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-    assert a.dtype == b.dtype == c.dtype == torch.float32
-    res = libm.fmaf(a.item(), b.item(), c.item())
-    return torch.tensor(res, dtype=torch.float32)
+    assert a.dtype == b.dtype == c.dtype
+    if a.dtype == torch.float32:
+        res = libm.fmaf(a.item(), b.item(), c.item())
+        return torch.tensor(res, dtype=torch.float32)
+    elif a.dtype == torch.float64:
+        res = libm.fma(a.item(), b.item(), c.item())
+        return torch.tensor(res, dtype=torch.float64)
+    else:
+        raise ValueError(f"Unsupported dtype: {a.dtype}")
 
 
 def truncate_to_tf32(x: torch.Tensor) -> torch.Tensor:
@@ -105,16 +113,17 @@ def pairwise_dot(
 
 
 def fused_sum(
-    significands: list[float], exponents: list[int], n_fraction_bits: int
+    significands: list[float], exponents: list[int], n_fractional_bits: int
 ) -> tuple[float, int]:
     max_exponent = max(exponents)
     significand_sum = 0.0
     for i in range(len(significands)):
         rounded = (
             math.trunc(
-                significands[i] * 2.0 ** (n_fraction_bits + exponents[i] - max_exponent)
+                significands[i]
+                * 2.0 ** (n_fractional_bits + exponents[i] - max_exponent)
             )
-            * 2.0**-n_fraction_bits
+            * 2.0**-n_fractional_bits
         )
         significand_sum += rounded
     return significand_sum, max_exponent
@@ -124,7 +133,7 @@ def fused_dot_add(
     a: torch.Tensor,
     b: torch.Tensor,
     c: torch.Tensor,
-    n_fraction_bits: int,
+    n_fractional_bits: int,
     scale_a: torch.Tensor,
     scale_b: torch.Tensor,
 ) -> tuple[float, int]:
@@ -144,14 +153,14 @@ def fused_dot_add(
         sb, eb = extract_significand_exponent(b[i])
         significands.append(sa * sb)
         exponents.append(ea + eb + esa + esb)
-    return fused_sum(significands, exponents, n_fraction_bits)
+    return fused_sum(significands, exponents, n_fractional_bits)
 
 
 def nv_fused_dot_add(
     a: torch.Tensor,
     b: torch.Tensor,
     c: torch.Tensor,
-    n_fraction_bits: int,
+    n_fractional_bits: int,
     output_type: str,
     scale_a: torch.Tensor | None = None,
     scale_b: torch.Tensor | None = None,
@@ -159,7 +168,7 @@ def nv_fused_dot_add(
     if scale_a is None or scale_b is None:
         scale_a = torch.tensor(1.0)
         scale_b = torch.tensor(1.0)
-    s, e = fused_dot_add(a, b, c, n_fraction_bits, scale_a, scale_b)
+    s, e = fused_dot_add(a, b, c, n_fractional_bits, scale_a, scale_b)
     if s != s:  # nan
         if output_type == "f16":
             return torch.tensor(0x7FFF, dtype=torch.uint16).view(torch.float16)
@@ -179,8 +188,8 @@ def nv_fused_dot_add(
         return torch.tensor(s * 2.0**e, dtype=torch.float16)
     else:  # "f32" or "f32_e8m13"
         s, e = extract_significand_exponent(s * 2.0**e, torch.float32)
-        n_fraction_bits = 13 if output_type == "f32_e8m13" else 23
-        s = math.trunc(s * 2.0**n_fraction_bits) * 2.0**-n_fraction_bits  # RZ
+        n_fractional_bits = 13 if output_type == "f32_e8m13" else 23
+        s = math.trunc(s * 2.0**n_fractional_bits) * 2.0**-n_fractional_bits  # RZ
         return torch.tensor(s * 2.0**e, dtype=torch.float32)
 
 
@@ -190,7 +199,7 @@ def nv_fused_dot_add_with_block_scale(
     c: torch.Tensor,
     scale_a: torch.Tensor,
     scale_b: torch.Tensor,
-    n_fraction_bits: int,
+    n_fractional_bits: int,
 ) -> torch.Tensor:
     if torch.isnan(scale_a).any() or torch.isnan(scale_b).any() or torch.isnan(c).any():
         return torch.tensor(0x7FFF_FFFF, dtype=torch.uint32).view(torch.float32)
@@ -209,7 +218,7 @@ def nv_fused_dot_add_with_block_scale(
         s1, e1 = extract_significand_exponent(scale_b[k // block_size])
         significands.append(s * s0 * s1)
         exponents.append(e0 + e1)
-    s, e = fused_sum(significands, exponents, n_fraction_bits)
+    s, e = fused_sum(significands, exponents, n_fractional_bits)
     s, e = extract_significand_exponent(s * 2.0**e, torch.float32)
     s = math.trunc(s * 2.0**23) * 2.0**-23  # RZ
     return torch.tensor(s * 2.0**e, dtype=torch.float32)
@@ -219,7 +228,7 @@ def amd_fused_dot_add(
     a: torch.Tensor,
     b: torch.Tensor,
     c: torch.Tensor,
-    n_fraction_bits: int,
+    n_fractional_bits: int,
     is_fp8: bool = False,
 ) -> float:
     products = a.double() * b.double()
@@ -250,16 +259,16 @@ def amd_fused_dot_add(
             return float("-inf")
     sc, ec = extract_significand_exponent(c)
     if is_fp8:
-        s0, e0 = fused_sum(significands[0::2], exponents[0::2], n_fraction_bits)
-        s1, e1 = fused_sum(significands[1::2], exponents[1::2], n_fraction_bits)
+        s0, e0 = fused_sum(significands[0::2], exponents[0::2], n_fractional_bits)
+        s1, e1 = fused_sum(significands[1::2], exponents[1::2], n_fractional_bits)
         max_e = max(e0, e1)
         s0 = (
-            math.floor(s0 * 2.0 ** (n_fraction_bits + e0 - max_e))
-            * 2.0**-n_fraction_bits
+            math.floor(s0 * 2.0 ** (n_fractional_bits + e0 - max_e))
+            * 2.0**-n_fractional_bits
         )
         s1 = (
-            math.floor(s1 * 2.0 ** (n_fraction_bits + e1 - max_e))
-            * 2.0**-n_fraction_bits
+            math.floor(s1 * 2.0 ** (n_fractional_bits + e1 - max_e))
+            * 2.0**-n_fractional_bits
         )
         s, e = s0 + s1, max_e
         max_e = max(e, ec)
@@ -269,7 +278,7 @@ def amd_fused_dot_add(
         else:
             sc = 0.0
     else:
-        s, e = fused_sum(significands, exponents, n_fraction_bits)
+        s, e = fused_sum(significands, exponents, n_fractional_bits)
         max_e = max(e, ec)
         s = math.floor(s * 2.0 ** (31 + e - max_e)) * 2.0**-31
         sc = math.floor(sc * 2.0 ** (24 + ec - max_e)) * 2.0**-24

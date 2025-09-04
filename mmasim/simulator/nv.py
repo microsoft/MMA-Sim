@@ -2,6 +2,7 @@ import torch
 
 from ..isa import MMA, WGMMA, TCGen05MMA
 from .functions import (
+    fma,
     truncate_to_tf32,
     unpack_fp4_tensor,
     nv_fused_dot_add,
@@ -9,7 +10,7 @@ from .functions import (
 )
 
 
-arch_accum_fraction_bits = {
+arch_accum_fractional_bits = {
     "Volta": 23,
     "Turing": 24,
     "Ampere": 24,
@@ -47,16 +48,16 @@ def is_split_k(arch: str, qualifier: str) -> bool:
 class MMASim(MMA):
     def __init__(self, arch: str, qualifier: str):
         MMA.__init__(self, arch, qualifier)
-        self.n_accum_fraction_bits = arch_accum_fraction_bits[arch]
+        self.n_accum_fractional_bits = arch_accum_fractional_bits[arch]
         self.output_type = "f32" if self.d_type == torch.float32 else "f16"
         # special cases
         if self.block_size > 0 and self.kind.startswith("mxf4"):
-            self.n_accum_fraction_bits = 35
+            self.n_accum_fractional_bits = 35
         if self.arch == "Ada Lovelace" and self.a_type in [
             torch.float8_e5m2,
             torch.float8_e4m3fn,
         ]:
-            self.n_accum_fraction_bits = 13
+            self.n_accum_fractional_bits = 13
             if self.output_type == "f32":
                 self.output_type = "f32_e8m13"
         self.is_split_k = is_split_k(arch, qualifier)
@@ -80,15 +81,42 @@ class MMASim(MMA):
             B = truncate_to_tf32(B)
         for i in range(m):
             for j in range(n):
-                sum = C[i, j]
-                if self.block_size > 0:
+                sum = C[i, j].to(dtype=self.d_type)
+                if self.a_type == torch.float64:  # fp64 mma
+                    for l in range(k):
+                        sum = fma(A[i, l], B[l, j], sum)
+                elif self.block_size == 0:  # mma without block scale
+                    if self.is_split_k:
+                        sum = nv_fused_dot_add(
+                            A[i, : k // 2],
+                            B[: k // 2, j],
+                            sum,
+                            n_fractional_bits=self.n_accum_fractional_bits,
+                            output_type=self.output_type,
+                        )
+                        sum = nv_fused_dot_add(
+                            A[i, k // 2 : k],
+                            B[k // 2 : k, j],
+                            sum,
+                            n_fractional_bits=self.n_accum_fractional_bits,
+                            output_type=self.output_type,
+                        )
+                    else:
+                        sum = nv_fused_dot_add(
+                            A[i, :],
+                            B[:, j],
+                            sum,
+                            n_fractional_bits=self.n_accum_fractional_bits,
+                            output_type=self.output_type,
+                        )
+                else:  # mma with block scale
                     assert scale_A is not None and scale_B is not None
                     if self.kind.startswith("mxf8"):
                         sum = nv_fused_dot_add(
                             A[i, :],
                             B[:, j],
                             sum,
-                            self.n_accum_fraction_bits,
+                            self.n_accum_fractional_bits,
                             self.output_type,
                             scale_A[i, 0],
                             scale_B[0, j],
@@ -102,31 +130,7 @@ class MMASim(MMA):
                             sum,
                             scale_A[i, :],
                             scale_B[:, j],
-                            self.n_accum_fraction_bits,
-                        )
-                else:  # without block scale
-                    if self.is_split_k:
-                        sum = nv_fused_dot_add(
-                            A[i, : k // 2],
-                            B[: k // 2, j],
-                            sum,
-                            n_fraction_bits=self.n_accum_fraction_bits,
-                            output_type=self.output_type,
-                        )
-                        sum = nv_fused_dot_add(
-                            A[i, k // 2 : k],
-                            B[k // 2 : k, j],
-                            sum,
-                            n_fraction_bits=self.n_accum_fraction_bits,
-                            output_type=self.output_type,
-                        )
-                    else:
-                        sum = nv_fused_dot_add(
-                            A[i, :],
-                            B[:, j],
-                            sum,
-                            n_fraction_bits=self.n_accum_fraction_bits,
-                            output_type=self.output_type,
+                            self.n_accum_fractional_bits,
                         )
                 D[i][j] = sum
         return D
@@ -135,13 +139,13 @@ class MMASim(MMA):
 class WGMMASim(WGMMA):
     def __init__(self, arch: str, qualifier: str):
         WGMMA.__init__(self, arch, qualifier)
-        self.n_accum_fraction_bits = 25
+        self.n_accum_fractional_bits = 25
         self.output_type = "f32" if self.d_type == torch.float32 else "f16"
         if self.a_type in [
             torch.float8_e5m2,
             torch.float8_e4m3fn,
         ]:
-            self.n_accum_fraction_bits = 13
+            self.n_accum_fractional_bits = 13
             if self.output_type == "f32":
                 self.output_type = "f32_e8m13"
 
@@ -164,7 +168,7 @@ class WGMMASim(WGMMA):
                     A[i, :],
                     B[:, j],
                     sum,
-                    n_fraction_bits=self.n_accum_fraction_bits,
+                    n_fractional_bits=self.n_accum_fractional_bits,
                     output_type=self.output_type,
                 )
                 D[i][j] = sum
@@ -174,7 +178,7 @@ class WGMMASim(WGMMA):
 class TCGen05MMASim(TCGen05MMA):
     def __init__(self, arch: str, qualifier: str):
         TCGen05MMA.__init__(self, arch, qualifier)
-        self.n_accum_fraction_bits = 35 if self.kind.startswith("mxf4") else 25
+        self.n_accum_fractional_bits = 35 if self.kind.startswith("mxf4") else 25
         self.output_type = "f32" if self.d_type == torch.float32 else "f16"
 
     def __call__(
@@ -204,7 +208,7 @@ class TCGen05MMASim(TCGen05MMA):
                             A[i, :],
                             B[:, j],
                             sum,
-                            self.n_accum_fraction_bits,
+                            self.n_accum_fractional_bits,
                             self.output_type,
                             scale_A[i, 0],
                             scale_B[0, j],
@@ -218,14 +222,14 @@ class TCGen05MMASim(TCGen05MMA):
                             sum,
                             scale_A[i, :],
                             scale_B[:, j],
-                            self.n_accum_fraction_bits,
+                            self.n_accum_fractional_bits,
                         )
                 else:  # without block scale
                     sum = nv_fused_dot_add(
                         A[i, :],
                         B[:, j],
                         sum,
-                        n_fraction_bits=self.n_accum_fraction_bits,
+                        n_fractional_bits=self.n_accum_fractional_bits,
                         output_type=self.output_type,
                     )
                 D[i][j] = sum

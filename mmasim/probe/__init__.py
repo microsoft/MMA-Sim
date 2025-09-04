@@ -43,7 +43,7 @@ def is_fused_dot_add(intrinsic: MatrixMultiplyAdd, group_size: int) -> bool:
     return True
 
 
-def is_pairwise_sum(intrinsic: Intrinsic, group_size: int) -> bool:
+def is_pairwise_sum(intrinsic: MatrixMultiplyAdd, group_size: int) -> bool:
     # summation tree:
     # c group_0_sum
     # | /
@@ -139,7 +139,7 @@ def probe_rounding_helper2(res1: bool, res2: bool, res3: bool) -> str:
 
 
 class ProbeFusedDotAdd:
-    def __init__(self, intrinsic: Intrinsic):
+    def __init__(self, intrinsic: MatrixMultiplyAdd):
         self.intrinsic = intrinsic
         self.dotadd = intrinsic.dotadd
         self.precision = []
@@ -162,34 +162,34 @@ class ProbeFusedDotAdd:
         while True:
             A[i] = 2.0 ** (e // 2)
             B[i] = 2.0 ** (e - e // 2)
-            if self.dotadd(A, B) != 2.0**e:
+            if self.dotadd(A, B, 0.0) != 2.0**e:
                 break
             e -= 1
         e += 1
-        n_fraction_bits = 14 - e
+        n_fractional_bits = 14 - e
         u1, u2 = 2.0 ** (e // 2), 2.0 ** (e - e // 2)  # u1 * u2 == ulp(M*M)
-        self.precision.append(n_fraction_bits)
+        self.precision.append(n_fractional_bits)
         self.M, self.u1, self.u2 = M, u1, u2
         # rounding mode
         A[i], B[i] = 0.75 * u1, u2
-        res1 = self.dotadd(A, B) == u1 * u2
+        res1 = self.dotadd(A, B, 0.0) == u1 * u2
         A[i], B[i] = -0.75 * u1, u2
-        res2 = self.dotadd(A, B) == 0.0
+        res2 = self.dotadd(A, B, 0.0) == 0.0
         A[i], B[i] = 0.25 * u1, u2
-        res3 = self.dotadd(A, B) == u1 * u2
+        res3 = self.dotadd(A, B, 0.0) == u1 * u2
         rounding = probe_rounding_helper1(res1, res2, res3)
         if rounding == "RN":
             A[i], B[i] = 0.5 * u1, u2
-            res1 = self.dotadd(A, B) == u1 * u2
+            res1 = self.dotadd(A, B, 0.0) == u1 * u2
             A[i], B[i] = -0.5 * u1, u2
-            res2 = self.dotadd(A, B) == 0.0
+            res2 = self.dotadd(A, B, 0.0) == 0.0
             A[i], B[i] = 1.5 * u1, u2
-            res3 = self.dotadd(A, B) == 2.0 * u1 * u2
+            res3 = self.dotadd(A, B, 0.0) == 2.0 * u1 * u2
             rounding = probe_rounding_helper2(res1, res2, res3)
         self.rounding_mode.append(rounding)
-        assert n_fraction_bits == self.precision[0]
+        assert n_fractional_bits == self.precision[0]
         assert rounding == self.rounding_mode[0]
-        return n_fraction_bits, rounding
+        return n_fractional_bits, rounding
 
     def probe_c_rounding(self) -> tuple[int, str]:
         # rounding precision
@@ -198,9 +198,9 @@ class ProbeFusedDotAdd:
         while self.dotadd([M, -M], [M, M], 2.0**e) == 2.0**e:
             e -= 1
         e += 1
-        n_fraction_bits = 14 - e
+        n_fractional_bits = 14 - e
         ulp = 2.0**e  # ulp(M*M)
-        self.c_precision = n_fraction_bits
+        self.c_precision = n_fractional_bits
         # rounding mode
         res1 = self.dotadd([M, -M], [M, M], 0.75 * ulp) == ulp
         res2 = self.dotadd([M, -M], [M, M], -0.75 * ulp) == 0.0
@@ -212,7 +212,7 @@ class ProbeFusedDotAdd:
             res3 = self.dotadd([M, -M], [M, M], 1.5 * ulp) == 2.0 * ulp
             rounding = probe_rounding_helper2(res1, res2, res3)
         self.c_rounding = rounding
-        return n_fraction_bits, rounding
+        return n_fractional_bits, rounding
 
     def probe_output_rounding(self) -> tuple[int, str]:
         # rounding precision
@@ -220,8 +220,8 @@ class ProbeFusedDotAdd:
         while self.dotadd([1.0], [1.0], 2.0**p) == 1.0 + 2.0**p:
             p -= 1
         p += 1
-        n_fraction_bits = -p
-        self.output_precision = n_fraction_bits
+        n_fractional_bits = -p
+        self.output_precision = n_fractional_bits
         M = 2.0**7
         A = [M / 2] * 4
         B = [-M / 2] * 4
@@ -237,7 +237,7 @@ class ProbeFusedDotAdd:
             res3 = self.dotadd(A, A, 1.5 * ulp) == M * M + 2 * ulp
             rounding = probe_rounding_helper2(res1, res2, res3)
         self.output_rounding = rounding
-        return n_fraction_bits, rounding
+        return n_fractional_bits, rounding
 
     def is_product_normalized(self) -> bool:
         # align according to exponent(a)+exponent(b) instead of exponent(a*b)
