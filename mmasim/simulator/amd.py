@@ -16,7 +16,10 @@ class MFMASim(MFMA):
         self.flush_denormal = False
         self.is_xf32 = False
         self.is_two_stage = False
-        if self.a_type == torch.float32:
+        if self.a_type == torch.float64:
+            self.operation_type = "standard"
+            self.group_size = 1
+        elif self.a_type == torch.float32:
             if qualifier.endswith("xf32"):
                 self.is_xf32 = True
                 self.operation_type = "fused_dot_add"
@@ -67,7 +70,7 @@ class MFMASim(MFMA):
             for j in range(n):
                 sum = C[i, j].to(dtype=self.d_type)
                 if self.operation_type == "standard":
-                    if self.group_size == 1:  # f32
+                    if self.group_size == 1:  # f64/f32
                         for l in range(k):
                             sum = fma(A[i, l], B[l, j], sum)
                     else:

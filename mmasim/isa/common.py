@@ -135,7 +135,10 @@ def amd_parse_qualifier(
     if len(qualifiers) == 2:
         # CDNA1 instructions
         d_type, shape_and_type = qualifiers
-        if shape_and_type.endswith("f32"):
+        if shape_and_type.endswith("f64"):
+            a_type = b_type = "f64"
+            shape = shape_and_type[:-3]
+        elif shape_and_type.endswith("f32"):
             a_type = b_type = "f32"
             shape = shape_and_type[:-3]
         elif shape_and_type.endswith("bf16"):
@@ -160,7 +163,7 @@ def amd_parse_qualifier(
             # fp8 instructions
             d_type, shape, a_type, b_type = qualifiers
         else:
-            # f32/f16/bf16 instructions
+            # f64/f32/f16/bf16 instructions
             d_type, shape, _, a_type = qualifiers
             b_type = a_type
     c_type = d_type
