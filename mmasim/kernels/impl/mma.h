@@ -145,7 +145,7 @@
     {                                          \
         for (uint32_t i = 0; i < 2; i++)       \
         {                                      \
-            uint32_t row = laneid % 4 * 2 + i; \
+            uint32_t row = i * 4 + laneid % 4; \
             uint32_t col = laneid / 4;         \
             b_frag[i] = b[col * K + row];      \
         }                                      \
@@ -244,7 +244,7 @@
         for (uint32_t i = 0; i < 4; i++)           \
         {                                          \
             uint32_t row = i / 2 * 8 + laneid / 4; \
-            uint32_t col = laneid % 4 * 2 + i;     \
+            uint32_t col = laneid % 4 * 2 + i % 2; \
             c_frag[i] = c[row * N + col];          \
         }                                          \
     } while (0)
@@ -352,7 +352,7 @@
         for (uint32_t i = 0; i < 4; i++)           \
         {                                          \
             uint32_t row = i / 2 * 8 + laneid / 4; \
-            uint32_t col = laneid % 4 * 2 + i;     \
+            uint32_t col = laneid % 4 * 2 + i % 2; \
             d[row * N + col] = d_frag[i];          \
         }                                          \
     } while (0)
