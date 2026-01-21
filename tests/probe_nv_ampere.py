@@ -1,9 +1,9 @@
-from mmasim.intrinsic.nv_ampere import mma_intrinsics
+from mmasim.kernels.nv_ampere import mma_kernels
 from mmasim.probe import ProbeFusedDotAdd, is_fused_dot_add
 
 
 if __name__ == "__main__":
-    for qualifier, intrinsic in mma_intrinsics.items():
+    for qualifier, intrinsic in mma_kernels.items():
         print(f"Testing Ampere instruction mma.{qualifier}")
         gsz = intrinsic.k
         if "tf32" in qualifier:  # tf32

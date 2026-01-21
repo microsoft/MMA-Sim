@@ -1,7 +1,7 @@
 import ctypes
 import pathlib
 
-from . import MMAIntrinsic
+from . import MMAKernel
 
 
 path = pathlib.Path(__file__).parent / "impl/nv_turing.so"
@@ -11,12 +11,12 @@ lib = ctypes.CDLL(str(path))
 lib.mma_m16n8k8_f32_f16_f16_f32.argtypes = [ctypes.c_void_p] * 4
 lib.mma_m16n8k8_f16_f16_f16_f16.argtypes = [ctypes.c_void_p] * 4
 
-mma_intrinsic_impls = {
+mma_kernel_impls = {
     # f16
     "m16n8k8.f32.f16.f16.f32": lib.mma_m16n8k8_f32_f16_f16_f32,
     "m16n8k8.f16.f16.f16.f16": lib.mma_m16n8k8_f16_f16_f16_f16,
 }
-mma_intrinsics = {
-    qualifier: MMAIntrinsic("Turing", qualifier, mma_intrinsic_impls[qualifier])
-    for qualifier in mma_intrinsic_impls
+mma_kernels = {
+    qualifier: MMAKernel("Turing", qualifier, mma_kernel_impls[qualifier])
+    for qualifier in mma_kernel_impls
 }

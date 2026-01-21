@@ -1,7 +1,7 @@
 import ctypes
 import pathlib
 
-from . import MFMAIntrinsic
+from . import MFMAKernel
 
 
 path = pathlib.Path(__file__).parent / "impl/amd_cdna3.so"
@@ -41,7 +41,7 @@ lib.mfma_f32_32x32x16_fp8_bf8.argtypes = [ctypes.c_void_p] * 4
 lib.mfma_f32_32x32x16_bf8_fp8.argtypes = [ctypes.c_void_p] * 4
 lib.mfma_f32_32x32x16_bf8_bf8.argtypes = [ctypes.c_void_p] * 4
 
-mfma_intrinsic_impls = {
+mfma_kernel_impls = {
     # f64
     "f64_16x16x4_f64": lib.mfma_f64_16x16x4_f64,
     "f64_4x4x4_4b_f64": lib.mfma_f64_4x4x4_4b_f64,
@@ -76,7 +76,7 @@ mfma_intrinsic_impls = {
     "f32_32x32x16_bf8_fp8": lib.mfma_f32_32x32x16_bf8_fp8,
     "f32_32x32x16_bf8_bf8": lib.mfma_f32_32x32x16_bf8_bf8,
 }
-mfma_intrinsics = {
-    qualifier: MFMAIntrinsic("CDNA3", qualifier, mfma_intrinsic_impls[qualifier])
-    for qualifier in mfma_intrinsic_impls
+mfma_kernels = {
+    qualifier: MFMAKernel("CDNA3", qualifier, mfma_kernel_impls[qualifier])
+    for qualifier in mfma_kernel_impls
 }

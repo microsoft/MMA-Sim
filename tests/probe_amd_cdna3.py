@@ -1,9 +1,9 @@
-from mmasim.intrinsic.amd_cdna3 import mfma_intrinsics
+from mmasim.kernels.amd_cdna3 import mfma_kernels
 from mmasim.probe import ProbeFusedDotAdd, is_fused_dot_add, is_pairwise_sum
 
 
 if __name__ == "__main__":
-    for qualifier, intrinsic in mfma_intrinsics.items():
+    for qualifier, intrinsic in mfma_kernels.items():
         print(f"Testing CDNA3 instruction mfma_{qualifier}")
         if qualifier.endswith(("_xf32", "_f16", "_bf16", "_fp8", "_bf8")):
             if qualifier.endswith("_xf32"):

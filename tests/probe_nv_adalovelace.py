@@ -1,9 +1,9 @@
-from mmasim.intrinsic.nv_adalovelace import mma_intrinsics
+from mmasim.kernels.nv_adalovelace import mma_kernels
 from mmasim.probe import ProbeFusedDotAdd, is_fused_dot_add
 
 
 if __name__ == "__main__":
-    for qualifier, intrinsic in mma_intrinsics.items():
+    for qualifier, intrinsic in mma_kernels.items():
         print(f"Testing Ada Lovelace instruction mma.{qualifier}")
         gsz = intrinsic.k
         if "tf32" in qualifier:  # tf32

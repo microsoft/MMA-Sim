@@ -1,7 +1,7 @@
 import ctypes
 import pathlib
 
-from . import MMAIntrinsic, WGMMAIntrinsic
+from . import MMAKernel, WGMMAKernel
 
 
 path = pathlib.Path(__file__).parent / "impl/nv_hopper.so"
@@ -43,7 +43,7 @@ lib.mma_m16n8k8_f32_bf16_bf16_f32.argtypes = [ctypes.c_void_p] * 4
 lib.mma_m16n8k8_f32_f16_f16_f32.argtypes = [ctypes.c_void_p] * 4
 lib.mma_m16n8k8_f16_f16_f16_f16.argtypes = [ctypes.c_void_p] * 4
 
-wgmma_intrinsic_impls = {
+wgmma_kernel_impls = {
     # sm_90a tf32
     "m64n8k8.f32.tf32.tf32": lib.wgmma_m64n8k8_f32_tf32_tf32,
     # sm_90a f16
@@ -62,7 +62,7 @@ wgmma_intrinsic_impls = {
     "m64n8k32.f16.e4m3.e5m2": lib.wgmma_m64n8k32_f16_e4m3_e5m2,
     "m64n8k32.f16.e4m3.e4m3": lib.wgmma_m64n8k32_f16_e4m3_e4m3,
 }
-mma_intrinsic_impls = {
+mma_kernel_impls = {
     # sm_90 f64
     "m16n8k16.f64.f64.f64.f64": lib.mma_m16n8k16_f64_f64_f64_f64,
     "m16n8k8.f64.f64.f64.f64": lib.mma_m16n8k8_f64_f64_f64_f64,
@@ -82,11 +82,11 @@ mma_intrinsic_impls = {
     "m16n8k8.f32.f16.f16.f32": lib.mma_m16n8k8_f32_f16_f16_f32,
     "m16n8k8.f16.f16.f16.f16": lib.mma_m16n8k8_f16_f16_f16_f16,
 }
-wgmma_intrinsics = {
-    qualifier: WGMMAIntrinsic("Hopper", qualifier, wgmma_intrinsic_impls[qualifier])
-    for qualifier in wgmma_intrinsic_impls
+wgmma_kernels = {
+    qualifier: WGMMAKernel("Hopper", qualifier, wgmma_kernel_impls[qualifier])
+    for qualifier in wgmma_kernel_impls
 }
-mma_intrinsics = {
-    qualifier: MMAIntrinsic("Hopper", qualifier, mma_intrinsic_impls[qualifier])
-    for qualifier in mma_intrinsic_impls
+mma_kernels = {
+    qualifier: MMAKernel("Hopper", qualifier, mma_kernel_impls[qualifier])
+    for qualifier in mma_kernel_impls
 }

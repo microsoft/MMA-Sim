@@ -1,7 +1,7 @@
 import ctypes
 import pathlib
 
-from . import MMAIntrinsic
+from . import MMAKernel
 
 
 path = pathlib.Path(__file__).parent / "impl/nv_adalovelace.so"
@@ -42,7 +42,7 @@ lib.mma_m16n8k8_f32_bf16_bf16_f32.argtypes = [ctypes.c_void_p] * 4
 lib.mma_m16n8k8_f32_f16_f16_f32.argtypes = [ctypes.c_void_p] * 4
 lib.mma_m16n8k8_f16_f16_f16_f16.argtypes = [ctypes.c_void_p] * 4
 
-mma_intrinsic_impls = {
+mma_kernel_impls = {
     # sm_89 fp8 m16n8k32 f32_output
     "m16n8k32.f32.e5m2.e5m2.f32": lib.mma_m16n8k32_f32_e5m2_e5m2_f32,
     "m16n8k32.f32.e5m2.e4m3.f32": lib.mma_m16n8k32_f32_e5m2_e4m3_f32,
@@ -78,7 +78,7 @@ mma_intrinsic_impls = {
     "m16n8k8.f32.f16.f16.f32": lib.mma_m16n8k8_f32_f16_f16_f32,
     "m16n8k8.f16.f16.f16.f16": lib.mma_m16n8k8_f16_f16_f16_f16,
 }
-mma_intrinsics = {
-    qualifier: MMAIntrinsic("Ada Lovelace", qualifier, mma_intrinsic_impls[qualifier])
-    for qualifier in mma_intrinsic_impls
+mma_kernels = {
+    qualifier: MMAKernel("Ada Lovelace", qualifier, mma_kernel_impls[qualifier])
+    for qualifier in mma_kernel_impls
 }

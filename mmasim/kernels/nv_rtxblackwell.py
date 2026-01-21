@@ -1,7 +1,7 @@
 import ctypes
 import pathlib
 
-from . import MMAIntrinsic
+from . import MMAKernel
 
 
 path = pathlib.Path(__file__).parent / "impl/nv_rtxblackwell.so"
@@ -62,7 +62,7 @@ lib.mma_m16n8k8_f32_bf16_bf16_f32.argtypes = [ctypes.c_void_p] * 4
 lib.mma_m16n8k8_f32_f16_f16_f32.argtypes = [ctypes.c_void_p] * 4
 lib.mma_m16n8k8_f16_f16_f16_f16.argtypes = [ctypes.c_void_p] * 4
 
-mma_intrinsic_impls = {
+mma_kernel_impls = {
     # sm_120a f8f6f4
     "m16n8k32.f8f6f4.f32.e5m2.e5m2.f32": lib.mma_m16n8k32_f8f6f4_f32_e5m2_e5m2_f32,
     "m16n8k32.f8f6f4.f32.e4m3.e4m3.f32": lib.mma_m16n8k32_f8f6f4_f32_e4m3_e4m3_f32,
@@ -110,7 +110,7 @@ mma_intrinsic_impls = {
     "m16n8k8.f32.f16.f16.f32": lib.mma_m16n8k8_f32_f16_f16_f32,
     "m16n8k8.f16.f16.f16.f16": lib.mma_m16n8k8_f16_f16_f16_f16,
 }
-mma_intrinsics = {
-    qualifier: MMAIntrinsic("RTX Blackwell", qualifier, mma_intrinsic_impls[qualifier])
-    for qualifier in mma_intrinsic_impls
+mma_kernels = {
+    qualifier: MMAKernel("RTX Blackwell", qualifier, mma_kernel_impls[qualifier])
+    for qualifier in mma_kernel_impls
 }

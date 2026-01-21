@@ -76,8 +76,8 @@ amd_cdna1 amd_cdna2 amd_cdna3
 Example followup (assuming your GPU architecture is Ampere):
 
 ```python
-from mmasim.intrinsic.nv_ampere import mma_intrinsics
-intrinsic = mma_intrinsics["m16n8k16.f16.f16.f16.f16"]
+from mmasim.kernels.nv_ampere import mma_kernels
+intrinsic = mma_kernels["m16n8k16.f16.f16.f16.f16"]
 D_real = intrinsic(A, B, C)
 print(D_real)
 is_bitwise_equal = D_sim.view(torch.uint16) == D_real.cpu().view(torch.uint16)

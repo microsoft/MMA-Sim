@@ -5,10 +5,10 @@ import torch
 from ..isa import MMA, WGMMA, TCGen05MMA, MFMA
 
 
-class MMAIntrinsic(MMA):
-    def __init__(self, arch: str, qualifier: str, intrinsic: Callable):
+class MMAKernel(MMA):
+    def __init__(self, arch: str, qualifier: str, kernel: Callable):
         MMA.__init__(self, arch, qualifier)
-        self.intrinsic = intrinsic
+        self.kernel = kernel
 
     def __call__(
         self,
@@ -39,7 +39,7 @@ class MMAIntrinsic(MMA):
                 scale_B = scale_B.T.contiguous().T  # Make scale_B column-major
             scale_A = scale_A.cuda()
             scale_B = scale_B.cuda()
-            self.intrinsic(
+            self.kernel(
                 D.data_ptr(),
                 A.data_ptr(),
                 B.data_ptr(),
@@ -48,14 +48,14 @@ class MMAIntrinsic(MMA):
                 scale_B.data_ptr(),
             )
         else:
-            self.intrinsic(D.data_ptr(), A.data_ptr(), B.data_ptr(), C.data_ptr())
+            self.kernel(D.data_ptr(), A.data_ptr(), B.data_ptr(), C.data_ptr())
         return D
 
 
-class WGMMAIntrinsic(WGMMA):
-    def __init__(self, arch: str, qualifier: str, intrinsic: Callable):
+class WGMMAKernel(WGMMA):
+    def __init__(self, arch: str, qualifier: str, kernel: Callable):
         WGMMA.__init__(self, arch, qualifier)
-        self.intrinsic = intrinsic
+        self.kernel = kernel
 
     def __call__(
         self, A: torch.Tensor, B: torch.Tensor, C: torch.Tensor
@@ -70,14 +70,14 @@ class WGMMAIntrinsic(WGMMA):
         A = A.cuda()
         B = B.cuda()
         D = C.cuda()
-        self.intrinsic(D.data_ptr(), A.data_ptr(), B.data_ptr())
+        self.kernel(D.data_ptr(), A.data_ptr(), B.data_ptr())
         return D
 
 
-class TCGen05MMAIntrinsic(TCGen05MMA):
-    def __init__(self, arch: str, qualifier: str, intrinsic: Callable):
+class TCGen05MMAKernel(TCGen05MMA):
+    def __init__(self, arch: str, qualifier: str, kernel: Callable):
         TCGen05MMA.__init__(self, arch, qualifier)
-        self.intrinsic = intrinsic
+        self.kernel = kernel
 
     def __call__(
         self,
@@ -107,7 +107,7 @@ class TCGen05MMAIntrinsic(TCGen05MMA):
                 scale_B = scale_B.T.contiguous().T  # Make scale_B column-major
             scale_A = scale_A.cuda()
             scale_B = scale_B.cuda()
-            self.intrinsic(
+            self.kernel(
                 D.data_ptr(),
                 A.data_ptr(),
                 B.data_ptr(),
@@ -115,14 +115,14 @@ class TCGen05MMAIntrinsic(TCGen05MMA):
                 scale_B.data_ptr(),
             )
         else:
-            self.intrinsic(D.data_ptr(), A.data_ptr(), B.data_ptr())
+            self.kernel(D.data_ptr(), A.data_ptr(), B.data_ptr())
         return D
 
 
-class MFMAIntrinsic(MFMA):
-    def __init__(self, arch: str, qualifier: str, intrinsic: Callable):
+class MFMAKernel(MFMA):
+    def __init__(self, arch: str, qualifier: str, kernel: Callable):
         MFMA.__init__(self, arch, qualifier)
-        self.intrinsic = intrinsic
+        self.kernel = kernel
 
     def __call__(
         self, A: torch.Tensor, B: torch.Tensor, C: torch.Tensor
@@ -138,5 +138,5 @@ class MFMAIntrinsic(MFMA):
         B = B.cuda()
         C = C.cuda()
         D = torch.empty((self.m, self.n), dtype=self.d_type, device="cuda")
-        self.intrinsic(D.data_ptr(), A.data_ptr(), B.data_ptr(), C.data_ptr())
+        self.kernel(D.data_ptr(), A.data_ptr(), B.data_ptr(), C.data_ptr())
         return D

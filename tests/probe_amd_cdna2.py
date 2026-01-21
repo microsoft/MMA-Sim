@@ -1,9 +1,9 @@
-from mmasim.intrinsic.amd_cdna2 import mfma_intrinsics
+from mmasim.kernels.amd_cdna2 import mfma_kernels
 from mmasim.probe import is_pairwise_sum
 
 
 if __name__ == "__main__":
-    for qualifier, intrinsic in mfma_intrinsics.items():
+    for qualifier, intrinsic in mfma_kernels.items():
         print(f"Testing CDNA2 instruction mfma_{qualifier}")
         if qualifier.endswith("f32"):
             gsz = 1
