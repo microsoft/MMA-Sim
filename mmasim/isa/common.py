@@ -14,6 +14,15 @@ class MatrixMultiplyAdd:
         self, A: torch.Tensor, B: torch.Tensor, C: torch.Tensor
     ) -> torch.Tensor: ...
 
+    def check_input(self, A: torch.Tensor, B: torch.Tensor, C: torch.Tensor):
+        m, n, k = self.m, self.n, self.k
+        assert A.shape == (m, k)
+        assert B.shape == (k, n)
+        assert C.shape == (m, n)
+        assert A.dtype == self.a_type
+        assert B.dtype == self.b_type
+        assert C.dtype == self.c_type
+
     def dotadd(self, a: list[float], b: list[float], c: float) -> float:
         A = torch.zeros([self.m, self.k], dtype=self.a_type)
         B_T = torch.zeros([self.n, self.k], dtype=self.b_type)
@@ -46,6 +55,25 @@ class MatrixMultiplyAddWithBlockScale:
         scale_A: torch.Tensor,
         scale_B: torch.Tensor,
     ) -> torch.Tensor: ...
+
+    def check_input(
+        self,
+        A: torch.Tensor,
+        B: torch.Tensor,
+        C: torch.Tensor,
+        scale_A: torch.Tensor,
+        scale_B: torch.Tensor,
+    ):
+        m, n, k, packing = self.m, self.n, self.k, self.packing
+        assert A.shape == (m, k // packing)
+        assert B.shape == (k // packing, n)
+        assert C.shape == (m, n)
+        assert A.dtype == self.a_type
+        assert B.dtype == self.b_type
+        assert C.dtype == self.c_type
+        assert scale_A.shape == (m, k // self.block_size)
+        assert scale_B.shape == (k // self.block_size, n)
+        assert scale_A.dtype == scale_B.dtype == self.s_type
 
     def dotadd_with_block_scale(
         self,
@@ -126,45 +154,3 @@ amd_torch_dtype = {
     "fp8": torch.float8_e4m3fnuz,
     "bf8": torch.float8_e5m2fnuz,
 }
-
-
-def amd_parse_qualifier(
-    qualifier: str,
-) -> tuple[str, str, str, str, str]:
-    qualifiers = qualifier.split("_")
-    if len(qualifiers) == 2:
-        # CDNA1 instructions
-        d_type, shape_and_type = qualifiers
-        if shape_and_type.endswith("f64"):
-            a_type = b_type = "f64"
-            shape = shape_and_type[:-3]
-        elif shape_and_type.endswith("f32"):
-            a_type = b_type = "f32"
-            shape = shape_and_type[:-3]
-        elif shape_and_type.endswith("bf16"):
-            a_type = b_type = "bf16"
-            shape = shape_and_type[:-4]
-        else:  # shape_and_type.endswith("f16"):
-            a_type = b_type = "f16"
-            shape = shape_and_type[:-3]
-    elif len(qualifiers) == 3:
-        if qualifiers[-1] == "1k":
-            # CDNA2 instructions
-            d_type, shape_and_type, _ = qualifiers
-            b_type = a_type = "bf16"
-            shape = shape_and_type[:-4]
-        else:
-            # CDNA3 instructions
-            d_type, shape, a_type = qualifiers
-            b_type = a_type
-    else:  # len(qualifiers) == 4:
-        # CDNA3 instructions
-        if qualifiers[-1] in ["fp8", "bf8"]:
-            # fp8 instructions
-            d_type, shape, a_type, b_type = qualifiers
-        else:
-            # f64/f32/f16/bf16 instructions
-            d_type, shape, _, a_type = qualifiers
-            b_type = a_type
-    c_type = d_type
-    return shape, d_type, a_type, b_type, c_type

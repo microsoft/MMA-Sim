@@ -1,11 +1,11 @@
-from mmasim.kernels import MMAKernel
+from mmasim.kernels import mma_kernel
 from mmasim.kernels.nv_hopper import mma_kernels, wgmma_kernels
 from mmasim.probe import ProbeFusedDotAdd, is_fused_dot_add
 
 
 if __name__ == "__main__":
     for qualifier, intrinsic in (mma_kernels | wgmma_kernels).items():
-        if isinstance(intrinsic, MMAKernel):
+        if isinstance(intrinsic, mma_kernel):
             print(f"Testing Hopper instruction mma.{qualifier}")
         else:
             print(f"Testing Hopper instruction wgmma.{qualifier}")

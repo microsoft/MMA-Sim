@@ -1,7 +1,7 @@
 import ctypes
 import pathlib
 
-from . import MFMAKernel
+from . import mfma_kernel
 
 
 path = pathlib.Path(__file__).parent / "impl/amd_cdna2.so"
@@ -65,6 +65,6 @@ mfma_kernel_impls = {
     "f32_4x4x2bf16": lib.mfma_f32_4x4x2bf16,
 }
 mfma_kernels = {
-    qualifier: MFMAKernel("CDNA2", qualifier, mfma_kernel_impls[qualifier])
+    qualifier: mfma_kernel("CDNA2", qualifier, mfma_kernel_impls[qualifier])
     for qualifier in mfma_kernel_impls
 }

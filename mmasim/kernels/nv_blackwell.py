@@ -1,7 +1,7 @@
 import ctypes
 import pathlib
 
-from . import MMAKernel, TCGen05MMAKernel
+from . import mma_kernel, tcgen05mma_kernel
 
 
 path = pathlib.Path(__file__).parent / "impl/nv_blackwell.so"
@@ -94,12 +94,12 @@ mma_kernel_impls = {
     "m16n8k8.f16.f16.f16.f16": lib.mma_m16n8k8_f16_f16_f16_f16,
 }
 tcgen05mma_kernels = {
-    qualifier: TCGen05MMAKernel(
+    qualifier: tcgen05mma_kernel(
         "Blackwell", qualifier, tcgen05mma_kernel_impls[qualifier]
     )
     for qualifier in tcgen05mma_kernel_impls
 }
 mma_kernels = {
-    qualifier: MMAKernel("Blackwell", qualifier, mma_kernel_impls[qualifier])
+    qualifier: mma_kernel("Blackwell", qualifier, mma_kernel_impls[qualifier])
     for qualifier in mma_kernel_impls
 }

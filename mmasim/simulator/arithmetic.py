@@ -91,7 +91,7 @@ def extract_significand_exponent(
         significand *= 2.0 ** (exponent - min_exponent)
         exponent = min_exponent
     if significand == 0.0:
-        exponent = -999
+        exponent = -126
     return significand, exponent
 
 
@@ -224,7 +224,7 @@ def nv_fused_dot_add_with_block_scale(
     return torch.tensor(s * 2.0**e, dtype=torch.float32)
 
 
-def amd_fused_dot_add(
+def amd_fused_dot_rd_add(
     a: torch.Tensor,
     b: torch.Tensor,
     c: torch.Tensor,

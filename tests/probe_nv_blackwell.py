@@ -1,11 +1,11 @@
-from mmasim.kernels import MMAKernel
+from mmasim.kernels import mma_kernel
 from mmasim.kernels.nv_blackwell import mma_kernels, tcgen05mma_kernels
 from mmasim.probe import ProbeFusedDotAdd, is_fused_dot_add
 
 
 if __name__ == "__main__":
     for qualifier, intrinsic in (mma_kernels | tcgen05mma_kernels).items():
-        if isinstance(intrinsic, MMAKernel):
+        if isinstance(intrinsic, mma_kernel):
             print(f"Testing Blackwell instruction mma.{qualifier}")
         else:
             print(f"Testing Blackwell instruction tcgen05.mma.{qualifier}")

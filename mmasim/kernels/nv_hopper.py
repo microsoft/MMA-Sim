@@ -1,7 +1,7 @@
 import ctypes
 import pathlib
 
-from . import MMAKernel, WGMMAKernel
+from . import mma_kernel, wgmma_kernel
 
 
 path = pathlib.Path(__file__).parent / "impl/nv_hopper.so"
@@ -83,10 +83,10 @@ mma_kernel_impls = {
     "m16n8k8.f16.f16.f16.f16": lib.mma_m16n8k8_f16_f16_f16_f16,
 }
 wgmma_kernels = {
-    qualifier: WGMMAKernel("Hopper", qualifier, wgmma_kernel_impls[qualifier])
+    qualifier: wgmma_kernel("Hopper", qualifier, wgmma_kernel_impls[qualifier])
     for qualifier in wgmma_kernel_impls
 }
 mma_kernels = {
-    qualifier: MMAKernel("Hopper", qualifier, mma_kernel_impls[qualifier])
+    qualifier: mma_kernel("Hopper", qualifier, mma_kernel_impls[qualifier])
     for qualifier in mma_kernel_impls
 }
