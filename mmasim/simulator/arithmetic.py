@@ -12,14 +12,13 @@ libm.fma.restype = ctypes.c_double
 
 def fma(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
     assert a.dtype == b.dtype == c.dtype
+    assert a.dtype in [torch.float32, torch.float64]
     if a.dtype == torch.float32:
         res = libm.fmaf(a.item(), b.item(), c.item())
         return torch.tensor(res, dtype=torch.float32)
-    elif a.dtype == torch.float64:
+    else:  # a.dtype == torch.float64:
         res = libm.fma(a.item(), b.item(), c.item())
         return torch.tensor(res, dtype=torch.float64)
-    else:
-        raise ValueError(f"Unsupported dtype: {a.dtype}")
 
 
 def truncate_to_tf32(x: torch.Tensor) -> torch.Tensor:

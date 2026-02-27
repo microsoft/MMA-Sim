@@ -1,13 +1,55 @@
+import math
+
 import torch
 
 from ..isa import amd
 from .arithmetic import (
     fma,
+    extract_significand_exponent,
     truncate_to_tf32,
     flush_denormal,
     pairwise_dot,
     amd_fused_dot_rd_add,
 )
+
+
+def chain_of_fma(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+    for i in range(a.numel()):
+        c = fma(a[i], b[i], c)
+    return c
+
+
+def exact_fused_dot_product_add(
+    a: torch.Tensor, b: torch.Tensor, c: torch.Tensor, L: int
+) -> torch.Tensor:
+    acc = c
+    for i in range(0, a.numel(), L):
+        p = a[i : i + L].double() * b[i : i + L].double()
+        sum = acc + p.sum()
+        if sum.isinf() or sum.isnan():
+            acc = sum.float()
+            continue
+        s, e = extract_significand_exponent(acc)
+        emin = e
+        sum = int(s * 2**23)
+        for j in range(L):
+            sj, ej = extract_significand_exponent(p[j])
+            if ej < emin:
+                sum <<= emin - ej
+                emin = ej
+            sum += int(sj * 2**23) << (ej - emin)
+        sign = 1 if sum >= 0 else -1
+        sum = abs(sum)
+        t = int(math.log2(sum))
+        if t > 25:
+            sticky = bool(sum & ((1 << (t - 25)) - 1))
+            sum = (sum >> (t - 25) << 1) | sticky
+            acc = torch.tensor(
+                sign * sum * 2.0 ** (emin - 23 + t - 26), dtype=torch.float32
+            )
+        else:
+            acc = torch.tensor(sign * sum * 2.0 ** (emin - 23), dtype=torch.float32)
+    return acc
 
 
 class mfma(amd.mfma):
@@ -69,7 +111,11 @@ class mfma(amd.mfma):
         for i in range(m):
             for j in range(n):
                 sum = C[i, j]
-                if self.operation_type == "fma":
+                if self.arch == "CDNA1" and self.a_type == torch.bfloat16:
+                    sum = exact_fused_dot_product_add(A[i, :], B[:, j], C[i, j], 2)
+                elif self.arch == "CDNA1" and self.a_type == torch.float16:
+                    sum = exact_fused_dot_product_add(A[i, :], B[:, j], C[i, j], 4)
+                elif self.operation_type == "fma":
                     for l in range(k):
                         sum = fma(A[i, l], B[l, j], sum)
                 elif self.operation_type == "pairwise":
