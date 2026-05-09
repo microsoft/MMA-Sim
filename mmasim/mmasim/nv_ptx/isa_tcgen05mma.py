@@ -1,17 +1,16 @@
-from ..common import (
-    MatrixMultiplyAdd,
-    MatrixMultiplyAddWithBlockScale,
-    nv_shape_to_mnk,
-    nv_torch_dtype,
+from .. import (
+    MMAOperation,
+    MMABlockScaleOperation,
 )
+from .isa_common import nv_torch_dtype, nv_shape_to_mnk
 
 # TODO: support tcgen05mma with .ws and .cta_group::2
 
 
-class tcgen05mma(MatrixMultiplyAdd):
-    def __init__(self, arch: str, qualifier: str):
+class TCGen05MMA(MMAOperation):
+    def __init__(self, arch: str, shape_and_type: str):
         assert arch == "Blackwell"
-        qualifiers = qualifier.split(".")
+        qualifiers = shape_and_type.split(".")
         assert len(qualifiers) == 4
         shape, d_type, a_type, b_type = qualifiers
         m, n, k = nv_shape_to_mnk(shape)
@@ -33,7 +32,7 @@ class tcgen05mma(MatrixMultiplyAdd):
             assert b_type in ["e5m2", "e4m3", "e2m1"]
             assert d_type in ["f32", "f16"]
         self.arch = arch
-        self.qualifier = qualifier
+        self.shape_and_type = shape_and_type
         self.m, self.n, self.k = m, n, k
         self.a_type = nv_torch_dtype[a_type]
         self.b_type = nv_torch_dtype[b_type]
@@ -41,10 +40,10 @@ class tcgen05mma(MatrixMultiplyAdd):
         self.d_type = nv_torch_dtype[d_type]
 
 
-class tcgen05mma_block_scale(MatrixMultiplyAddWithBlockScale):
-    def __init__(self, arch: str, qualifier: str):
+class TCGen05MMABlockScale(MMABlockScaleOperation):
+    def __init__(self, arch: str, shape_and_type: str):
         assert arch == "Blackwell"
-        qualifiers = qualifier.split(".")
+        qualifiers = shape_and_type.split(".")
         assert len(qualifiers) == 6
         shape, block_size, d_type, a_type, b_type, s_type = qualifiers
         m, n, k = nv_shape_to_mnk(shape)
@@ -66,7 +65,7 @@ class tcgen05mma_block_scale(MatrixMultiplyAddWithBlockScale):
             else:  # s_type == "ue4m3"
                 assert block_size == "block16"
         self.arch = arch
-        self.qualifier = qualifier
+        self.shape_and_type = shape_and_type
         self.m, self.n, self.k = m, n, k
         self.block_size = int(block_size[-2:])
         self.packing = 2 if k == 64 else 1

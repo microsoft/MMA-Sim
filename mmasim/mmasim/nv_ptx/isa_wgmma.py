@@ -1,10 +1,11 @@
-from ..common import MatrixMultiplyAdd, nv_shape_to_mnk, nv_torch_dtype
+from .. import MMAOperation
+from .isa_common import nv_torch_dtype, nv_shape_to_mnk
 
 
-class wgmma(MatrixMultiplyAdd):
-    def __init__(self, arch: str, qualifier: str):
+class WGMMA(MMAOperation):
+    def __init__(self, arch: str, shape_and_type: str):
         assert arch == "Hopper"
-        qualifiers = qualifier.split(".")
+        qualifiers = shape_and_type.split(".")
         assert len(qualifiers) == 4
         shape, d_type, a_type, b_type = qualifiers
         m, n, k = nv_shape_to_mnk(shape)
@@ -27,7 +28,7 @@ class wgmma(MatrixMultiplyAdd):
             assert b_type in ["e5m2", "e4m3"]
             assert d_type in ["f32", "f16"]
         self.arch = arch
-        self.qualifier = qualifier
+        self.shape_and_type = shape_and_type
         self.m, self.n, self.k = m, n, k
         self.a_type = nv_torch_dtype[a_type]
         self.b_type = nv_torch_dtype[b_type]

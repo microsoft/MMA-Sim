@@ -1,8 +1,7 @@
 import ctypes
 import pathlib
 
-from . import mma_kernel
-
+from . import MMA
 
 path = pathlib.Path(__file__).parent / "impl/nv_ampere.so"
 lib = ctypes.CDLL(str(path))
@@ -38,7 +37,8 @@ mma_kernel_impls = {
     "m16n8k8.f32.f16.f16.f32": lib.mma_m16n8k8_f32_f16_f16_f32,
     "m16n8k8.f16.f16.f16.f16": lib.mma_m16n8k8_f16_f16_f16_f16,
 }
+
 mma_kernels = {
-    qualifier: mma_kernel("Ampere", qualifier, mma_kernel_impls[qualifier])
-    for qualifier in mma_kernel_impls
+    shape_and_type: MMA("Ampere", shape_and_type, mma_kernel_impls[shape_and_type])
+    for shape_and_type in mma_kernel_impls
 }

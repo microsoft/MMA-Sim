@@ -1,7 +1,7 @@
-from ..isa.common import MatrixMultiplyAdd
+from ..isa.common import MMAOperation
 
 
-def is_fused_dot_add(intrinsic: MatrixMultiplyAdd, group_size: int) -> bool:
+def is_fused_dot_add(intrinsic: MMAOperation, group_size: int) -> bool:
     # summation tree: (group_size+1)-way tree
     # c group_0
     # | ////
@@ -16,7 +16,7 @@ def is_fused_dot_add(intrinsic: MatrixMultiplyAdd, group_size: int) -> bool:
 
     # verify via FPRev's method
     K = intrinsic.k
-    dotadd = intrinsic.dotadd
+    dotadd = intrinsic.dpa
     X = 2.0**7
     y = 2.0**-9
     i = 0
@@ -43,7 +43,7 @@ def is_fused_dot_add(intrinsic: MatrixMultiplyAdd, group_size: int) -> bool:
     return True
 
 
-def is_pairwise_sum(intrinsic: MatrixMultiplyAdd, group_size: int) -> bool:
+def is_pairwise_sum(intrinsic: MMAOperation, group_size: int) -> bool:
     # summation tree:
     # c group_0_sum
     # | /
@@ -67,7 +67,7 @@ def is_pairwise_sum(intrinsic: MatrixMultiplyAdd, group_size: int) -> bool:
 
     # verify via FPRev's method
     K = intrinsic.k
-    dotadd = intrinsic.dotadd
+    dotadd = intrinsic.dpa
     X = 2.0**7
     y = 2.0**-9
     i = 0
@@ -139,9 +139,9 @@ def probe_rounding_helper2(res1: bool, res2: bool, res3: bool) -> str:
 
 
 class ProbeFusedDotAdd:
-    def __init__(self, intrinsic: MatrixMultiplyAdd):
+    def __init__(self, intrinsic: MMAOperation):
         self.intrinsic = intrinsic
-        self.dotadd = intrinsic.dotadd
+        self.dotadd = intrinsic.dpa
         self.precision = []
         self.rounding_mode = []
         self.M, self.u1, self.u2 = 0.0, 0.0, 0.0

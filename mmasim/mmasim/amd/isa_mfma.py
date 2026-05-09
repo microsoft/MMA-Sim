@@ -1,8 +1,19 @@
-__all__ = ["mfma"]
+import torch
 
-from .common import MatrixMultiplyAdd, amd_torch_dtype
+from .. import MMAOperation
 
-cdna1_mfma_qualifiers = [
+amd_torch_dtype = {
+    "f64": torch.float64,
+    "f32": torch.float32,
+    "xf32": torch.float32,
+    "f16": torch.float16,
+    "bf16": torch.bfloat16,
+    "fp8": torch.float8_e4m3fnuz,
+    "bf8": torch.float8_e5m2fnuz,
+}
+
+
+cdna1_mfma_suffix = [
     # f32
     "f32_32x32x2f32",
     "f32_32x32x1f32",
@@ -22,7 +33,7 @@ cdna1_mfma_qualifiers = [
     "f32_16x16x2bf16",
     "f32_4x4x2bf16",
 ]
-cdna2_mfma_qualifiers = [
+cdna2_mfma_suffix = [
     # cdna2 f64
     "f64_16x16x4f64",
     "f64_4x4x4f64",
@@ -33,7 +44,7 @@ cdna2_mfma_qualifiers = [
     "f32_16x16x4bf16_1k",
     "f32_4x4x4bf16_1k",
 ]
-cdna3_mfma_qualifiers = [
+cdna3_mfma_suffix = [
     # f64
     "f64_16x16x4_f64",
     "f64_4x4x4_4b_f64",
@@ -69,27 +80,27 @@ cdna3_mfma_qualifiers = [
     "f32_32x32x16_fp8_fp8",
 ]
 
-arch_mfma_qualifiers = {
-    "CDNA1": cdna1_mfma_qualifiers,
-    "CDNA2": cdna2_mfma_qualifiers + cdna1_mfma_qualifiers,
-    "CDNA3": cdna3_mfma_qualifiers,
+arch_mfma_suffix = {
+    "CDNA1": cdna1_mfma_suffix,
+    "CDNA2": cdna2_mfma_suffix + cdna1_mfma_suffix,
+    "CDNA3": cdna3_mfma_suffix,
 }
 
 
-class mfma(MatrixMultiplyAdd):
-    def __init__(self, arch: str, qualifier: str):
-        assert arch in arch_mfma_qualifiers.keys(), (
+class MFMA(MMAOperation):
+    def __init__(self, arch: str, suffix: str):
+        assert arch in arch_mfma_suffix.keys(), (
             f"Unsupported architecture {arch} for mfma.\n"
-            f"Supported architectures: {list(arch_mfma_qualifiers.keys())}"
+            f"Supported architectures: {list(arch_mfma_suffix.keys())}"
         )
-        supported_qualifiers = arch_mfma_qualifiers[arch]
-        assert qualifier in supported_qualifiers, (
-            f"Unsupported qualifier {qualifier} for mfma on {arch} architecture.\n"
-            f"Supported qualifiers: {supported_qualifiers}"
+        supported_suffix = arch_mfma_suffix[arch]
+        assert suffix in supported_suffix, (
+            f"Unsupported suffix {suffix} for mfma on {arch} architecture.\n"
+            f"Supported suffix: {supported_suffix}"
         )
-        qualifiers = qualifier.split("_")
+        qualifiers = suffix.split("_")
         if len(qualifiers) == 2:
-            # CDNA1 instructions
+            # CDNA1/CDNA2 instructions
             d_type, shape_and_type = qualifiers
             if shape_and_type.endswith("bf16"):
                 a_type = b_type = "bf16"
@@ -99,7 +110,7 @@ class mfma(MatrixMultiplyAdd):
                 shape = shape_and_type[:-3]
         elif len(qualifiers) == 3:
             if qualifiers[-1] == "1k":
-                # CDNA2 instructions
+                # CDNA2 instructions with _1k suffix
                 d_type, shape_and_type, _ = qualifiers
                 b_type = a_type = "bf16"
                 shape = shape_and_type[:-4]
@@ -117,7 +128,7 @@ class mfma(MatrixMultiplyAdd):
                 d_type, shape, _, a_type = qualifiers
                 b_type = a_type
         self.arch = arch
-        self.qualifier = qualifier
+        self.suffix = suffix
         self.m, self.n, self.k = map(int, shape.split("x"))
         self.a_type = amd_torch_dtype[a_type]
         self.b_type = amd_torch_dtype[b_type]

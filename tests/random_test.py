@@ -1,13 +1,13 @@
 import torch
 
-from mmasim.isa.common import MatrixMultiplyAdd, MatrixMultiplyAddWithBlockScale
+from mmasim.isa.common import MMAOperation, MMABlockScaleOperation
 
 storage_type = {8: torch.uint64, 4: torch.uint32, 2: torch.uint16, 1: torch.uint8}
 
 
 def random_test(
-    sim: MatrixMultiplyAdd | MatrixMultiplyAddWithBlockScale,
-    real: MatrixMultiplyAdd | MatrixMultiplyAddWithBlockScale,
+    sim: MMAOperation | MMABlockScaleOperation,
+    real: MMAOperation | MMABlockScaleOperation,
     allow_different_nan: bool,
     trials: int,
 ):
@@ -18,7 +18,7 @@ def random_test(
     d_type = sim.d_type
     has_block_scale = False
     packing = 1
-    if isinstance(sim, MatrixMultiplyAddWithBlockScale):
+    if isinstance(sim, MMABlockScaleOperation):
         has_block_scale = sim.block_size > 0
         packing = sim.packing
     for _ in range(trials):
@@ -49,8 +49,8 @@ def random_test(
             .view(m, n)
         )
         if has_block_scale:
-            assert isinstance(sim, MatrixMultiplyAddWithBlockScale)
-            assert isinstance(real, MatrixMultiplyAddWithBlockScale)
+            assert isinstance(sim, MMABlockScaleOperation)
+            assert isinstance(real, MMABlockScaleOperation)
             s_type, block_size = sim.s_type, sim.block_size
             scale_A = (
                 torch.randint(
@@ -76,8 +76,8 @@ def random_test(
             D_sim = sim(A, B, C, scale_A, scale_B)
             D_real = real(A, B, C, scale_A, scale_B).cpu()
         else:
-            assert isinstance(sim, MatrixMultiplyAdd)
-            assert isinstance(real, MatrixMultiplyAdd)
+            assert isinstance(sim, MMAOperation)
+            assert isinstance(real, MMAOperation)
             D_sim = sim(A, B, C)
             D_real = real(A, B, C).cpu()
         D_sim_raw = D_sim.view(storage_type[d_type.itemsize])
