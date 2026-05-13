@@ -3,7 +3,7 @@ import pathlib
 
 from . import MMA, TCGen05MMA, TCGen05MMABlockScale
 
-path = pathlib.Path(__file__).parent / "impl/nv_blackwell.so"
+path = pathlib.Path(__file__).parent / "kernels/blackwell.so"
 lib = ctypes.CDLL(str(path))
 
 # sm_80 f64
@@ -55,7 +55,7 @@ lib.tcgen05mma_mxf4nvf4_m128n8k64_block16_f32_e2m1_e2m1_ue4m3.argtypes = [
     ctypes.c_void_p
 ] * 5
 
-mma_kernel_impls = {
+mma_cuda_kernels = {
     # sm_80 f64
     "m8n8k4.f64.f64.f64.f64": lib.mma_m8n8k4_f64_f64_f64_f64,
     # sm_80 tf32
@@ -71,7 +71,7 @@ mma_kernel_impls = {
     "m16n8k8.f32.f16.f16.f32": lib.mma_m16n8k8_f32_f16_f16_f32,
     "m16n8k8.f16.f16.f16.f16": lib.mma_m16n8k8_f16_f16_f16_f16,
 }
-tcgen05mma_kernel_impls = {
+tcgen05mma_cuda_kernels = {
     # sm_100a tf32
     "tf32.m64n8k8.f32.tf32.tf32": lib.tcgen05mma_tf32_m64n8k8_f32_tf32_tf32,
     # sm_100a f16 and bf16
@@ -85,7 +85,7 @@ tcgen05mma_kernel_impls = {
     "f8f6f4.m64n8k32.f16.e5m2.e5m2": lib.tcgen05mma_f8f6f4_m64n8k32_f16_e5m2_e5m2,
     "f8f6f4.m64n8k32.f16.e4m3.e4m3": lib.tcgen05mma_f8f6f4_m64n8k32_f16_e4m3_e4m3,
 }
-tcgen05mma_block_scale_kernel_impls = {
+tcgen05mma_block_scale_cuda_kernels = {
     # sm_100a mxf8f6f4
     "mxf8f6f4.m128n8k32.block32.f32.e5m2.e5m2.ue8m0": lib.tcgen05mma_mxf8f6f4_m128n8k32_block32_f32_e5m2_e5m2_ue8m0,
     "mxf8f6f4.m128n8k32.block32.f32.e4m3.e4m3.ue8m0": lib.tcgen05mma_mxf8f6f4_m128n8k32_block32_f32_e4m3_e4m3_ue8m0,
@@ -97,18 +97,18 @@ tcgen05mma_block_scale_kernel_impls = {
 }
 
 mma_kernels = {
-    shape_and_type: MMA("Blackwell", shape_and_type, mma_kernel_impls[shape_and_type])
-    for shape_and_type in mma_kernel_impls
+    shape_and_type: MMA("Blackwell", shape_and_type, mma_cuda_kernels[shape_and_type])
+    for shape_and_type in mma_cuda_kernels
 }
 tcgen05mma_kernels = {
     shape_and_type: TCGen05MMA(
-        "Blackwell", shape_and_type, tcgen05mma_kernel_impls[shape_and_type]
+        "Blackwell", shape_and_type, tcgen05mma_cuda_kernels[shape_and_type]
     )
-    for shape_and_type in tcgen05mma_kernel_impls
+    for shape_and_type in tcgen05mma_cuda_kernels
 }
 tcgen05mma_block_scale_kernels = {
     shape_and_type: TCGen05MMABlockScale(
-        "Blackwell", shape_and_type, tcgen05mma_block_scale_kernel_impls[shape_and_type]
+        "Blackwell", shape_and_type, tcgen05mma_block_scale_cuda_kernels[shape_and_type]
     )
-    for shape_and_type in tcgen05mma_block_scale_kernel_impls
+    for shape_and_type in tcgen05mma_block_scale_cuda_kernels
 }

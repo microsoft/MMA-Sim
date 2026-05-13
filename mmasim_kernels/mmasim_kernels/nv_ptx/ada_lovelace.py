@@ -3,7 +3,7 @@ import pathlib
 
 from . import MMA
 
-path = pathlib.Path(__file__).parent / "impl/nv_adalovelace.so"
+path = pathlib.Path(__file__).parent / "kernels/ada_lovelace.so"
 lib = ctypes.CDLL(str(path))
 
 # sm_89 fp8 m16n8k32 f32_output
@@ -41,7 +41,7 @@ lib.mma_m16n8k8_f32_bf16_bf16_f32.argtypes = [ctypes.c_void_p] * 4
 lib.mma_m16n8k8_f32_f16_f16_f32.argtypes = [ctypes.c_void_p] * 4
 lib.mma_m16n8k8_f16_f16_f16_f16.argtypes = [ctypes.c_void_p] * 4
 
-mma_kernel_impls = {
+mma_cuda_kernels = {
     # sm_89 fp8 m16n8k32 f32_output
     "m16n8k32.f32.e5m2.e5m2.f32": lib.mma_m16n8k32_f32_e5m2_e5m2_f32,
     "m16n8k32.f32.e5m2.e4m3.f32": lib.mma_m16n8k32_f32_e5m2_e4m3_f32,
@@ -80,7 +80,7 @@ mma_kernel_impls = {
 
 mma_kernels = {
     shape_and_type: MMA(
-        "Ada Lovelace", shape_and_type, mma_kernel_impls[shape_and_type]
+        "Ada Lovelace", shape_and_type, mma_cuda_kernels[shape_and_type]
     )
-    for shape_and_type in mma_kernel_impls
+    for shape_and_type in mma_cuda_kernels
 }

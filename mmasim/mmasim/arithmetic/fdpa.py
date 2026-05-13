@@ -76,18 +76,6 @@ def t_fdpa(
     return sig_exp_to_fp(sum, max_e, rho)
 
 
-def dpa_on_t_fdpa(
-    a: torch.Tensor, b: torch.Tensor, c: torch.Tensor, F: int, rho: str, L_max: int
-) -> torch.Tensor:
-    if a.dtype == torch.float32:  # tf32
-        a = truncate_fp32_to_tf32(a)
-        b = truncate_fp32_to_tf32(b)
-    L = min(len(a), L_max)
-    for i in range(0, len(a), L):
-        c = t_fdpa(a[i * L : (i + 1) * L], b[i * L : (i + 1) * L], c, F, rho)
-    return c
-
-
 class MMA_T_FDPA(MMAOperation):
     def __init__(self, F: int, rho: str, L_max: int):
         self.F = F
@@ -95,7 +83,15 @@ class MMA_T_FDPA(MMAOperation):
         self.L_max = L_max
 
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-        return dpa_on_t_fdpa(a, b, c, self.F, self.rho, self.L_max)
+        if a.dtype == torch.float32:  # tf32
+            a = truncate_fp32_to_tf32(a)
+            b = truncate_fp32_to_tf32(b)
+        L = min(len(a), self.L_max)
+        for i in range(0, len(a), L):
+            c = t_fdpa(
+                a[i * L : (i + 1) * L], b[i * L : (i + 1) * L], c, self.F, self.rho
+            )
+        return c
 
     def __call__(
         self, A: torch.Tensor, B: torch.Tensor, C: torch.Tensor
@@ -129,30 +125,6 @@ def st_fdpa(
     return sig_exp_to_fp(sum, max_e, rho)
 
 
-def dpa_on_st_fdpa(
-    a: torch.Tensor,
-    b: torch.Tensor,
-    c: torch.Tensor,
-    alpha: torch.Tensor,
-    beta: torch.Tensor,
-    F: int,
-    rho: str,
-    L_max: int,
-) -> torch.Tensor:
-    L = min(len(a), L_max)
-    for i in range(0, len(a), L):
-        c = st_fdpa(
-            a[i * L : (i + 1) * L],
-            b[i * L : (i + 1) * L],
-            c,
-            alpha,
-            beta,
-            F,
-            rho,
-        )
-    return c
-
-
 class MMA_ST_FDPA(MMABlockScaleOperation):
     def __init__(self, F: int, rho: str, L_max: int):
         self.F = F
@@ -167,7 +139,18 @@ class MMA_ST_FDPA(MMABlockScaleOperation):
         alpha: torch.Tensor,
         beta: torch.Tensor,
     ) -> torch.Tensor:
-        return dpa_on_st_fdpa(a, b, c, alpha, beta, self.F, self.rho, self.L_max)
+        L = min(len(a), self.L_max)
+        for i in range(0, len(a), L):
+            c = st_fdpa(
+                a[i * L : (i + 1) * L],
+                b[i * L : (i + 1) * L],
+                c,
+                alpha,
+                beta,
+                self.F,
+                self.rho,
+            )
+        return c
 
     def __call__(
         self,
@@ -216,37 +199,6 @@ def gst_fdpa(
     return sig_exp_to_fp(sum, max_e, rho)
 
 
-def dpa_on_gst_fdpa(
-    a: torch.Tensor,
-    b: torch.Tensor,
-    c: torch.Tensor,
-    alpha: torch.Tensor,
-    beta: torch.Tensor,
-    G: int,
-    F: int,
-    rho: str,
-    L_max: int,
-) -> torch.Tensor:
-    if a.dtype == torch.uint8:  # unpacked
-        a = unpack_uint8_to_fp4(a)
-    if b.dtype == torch.uint8:
-        b = unpack_uint8_to_fp4(b)
-    L = min(len(a), L_max)
-    K_block = len(a) // len(alpha)
-    for i in range(0, len(a), L):
-        c = gst_fdpa(
-            a[i : i + L],
-            b[i : i + L],
-            c,
-            alpha[i // K_block : (i + L) // K_block],
-            beta[i // K_block : (i + L) // K_block],
-            G,
-            F,
-            rho,
-        )
-    return c
-
-
 class MMA_GST_FDPA(MMABlockScaleOperation):
     def __init__(self, G: int, F: int, rho: str, L_max: int):
         self.G = G
@@ -262,9 +214,24 @@ class MMA_GST_FDPA(MMABlockScaleOperation):
         alpha: torch.Tensor,
         beta: torch.Tensor,
     ) -> torch.Tensor:
-        return dpa_on_gst_fdpa(
-            a, b, c, alpha, beta, self.G, self.F, self.rho, self.L_max
-        )
+        if a.dtype == torch.uint8:  # unpacked
+            a = unpack_uint8_to_fp4(a)
+        if b.dtype == torch.uint8:
+            b = unpack_uint8_to_fp4(b)
+        L = min(len(a), self.L_max)
+        K_block = len(a) // len(alpha)
+        for i in range(0, len(a), L):
+            c = gst_fdpa(
+                a[i : i + L],
+                b[i : i + L],
+                c,
+                alpha[i // K_block : (i + L) // K_block],
+                beta[i // K_block : (i + L) // K_block],
+                self.G,
+                self.F,
+                self.rho,
+            )
+        return c
 
     def __call__(
         self,
@@ -317,21 +284,15 @@ def e_fdpa(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
         return torch.tensor(sign * sum * 2.0 ** (emin - 23), dtype=torch.float32)
 
 
-def dpa_on_e_fdpa(
-    a: torch.Tensor, b: torch.Tensor, c: torch.Tensor, L_max: int
-) -> torch.Tensor:
-    L = min(len(a), L_max)
-    for i in range(0, len(a), L):
-        c = e_fdpa(a[i : i + L], b[i : i + L], c)
-    return c
-
-
 class MMA_E_FDPA(MMAOperation):
     def __init__(self, L_max: int):
         self.L_max = L_max
 
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-        return dpa_on_e_fdpa(a, b, c, self.L_max)
+        L = min(len(a), self.L_max)
+        for i in range(0, len(a), L):
+            c = e_fdpa(a[i : i + L], b[i : i + L], c)
+        return c
 
     def __call__(
         self,
@@ -360,21 +321,6 @@ def tr_fdpa(
     return sig_exp_to_fp(sum, max_e, rho)
 
 
-def dpa_on_tr_fdpa(
-    a: torch.Tensor,
-    b: torch.Tensor,
-    c: torch.Tensor,
-    F: int,
-    F2: int,
-    rho: str,
-    L_max: int,
-) -> torch.Tensor:
-    L = min(len(a), L_max)
-    for i in range(0, len(a), L):
-        c = tr_fdpa(a[i : i + L], b[i : i + L], c, F, F2, rho)
-    return c
-
-
 class MMA_TR_FDPA(MMAOperation):
     def __init__(self, F: int, F2: int, rho: str, L_max: int):
         self.F = F
@@ -383,7 +329,10 @@ class MMA_TR_FDPA(MMAOperation):
         self.L_max = L_max
 
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-        return dpa_on_tr_fdpa(a, b, c, self.F, self.F2, self.rho, self.L_max)
+        L = min(len(a), self.L_max)
+        for i in range(0, len(a), L):
+            c = tr_fdpa(a[i : i + L], b[i : i + L], c, self.F, self.F2, self.rho)
+        return c
 
     def __call__(
         self,
@@ -422,21 +371,6 @@ def gtr_fdpa(
     return sig_exp_to_fp(sum, E, rho)
 
 
-def dpa_on_gtr_fdpa(
-    a: torch.Tensor,
-    b: torch.Tensor,
-    c: torch.Tensor,
-    F: int,
-    F2: int,
-    rho: str,
-    L_max: int,
-) -> torch.Tensor:
-    L = min(len(a), L_max)
-    for i in range(0, len(a), L):
-        c = gtr_fdpa(a[i : i + L], b[i : i + L], c, F, F2, rho)
-    return c
-
-
 class MMA_GTR_FDPA(MMAOperation):
     def __init__(self, F: int, F2: int, rho: str, L_max: int):
         self.F = F
@@ -445,7 +379,10 @@ class MMA_GTR_FDPA(MMAOperation):
         self.L_max = L_max
 
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-        return dpa_on_gtr_fdpa(a, b, c, self.F, self.F2, self.rho, self.L_max)
+        L = min(len(a), self.L_max)
+        for i in range(0, len(a), L):
+            c = gtr_fdpa(a[i : i + L], b[i : i + L], c, self.F, self.F2, self.rho)
+        return c
 
     def __call__(
         self,

@@ -22,15 +22,11 @@ def fma(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
         return torch.tensor(res, dtype=torch.float64)
 
 
-def dpa_on_fma(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-    for i in range(len(a)):
-        c = fma(a[i], b[i], c)
-    return c
-
-
 class MMA_FMA(MMAOperation):
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-        return dpa_on_fma(a, b, c)
+        for i in range(len(a)):
+            c = fma(a[i], b[i], c)
+        return c
 
     def __call__(
         self,

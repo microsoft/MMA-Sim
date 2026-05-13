@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mmasim-kernels"
+version = "1.1.0"
+authors = [{ name="Peichen Xie", email="peichenxie@microsoft.com" }]
+requires-python = ">=3.10"
+dependencies = ["torch>=2.6", "mmasim>=1.1.0"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-data]
+mmasim_kernels = ["amd/kernels/*.so", "nv_ptx/kernels/*.so"]

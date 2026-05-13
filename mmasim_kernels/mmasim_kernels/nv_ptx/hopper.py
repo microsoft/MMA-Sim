@@ -3,7 +3,7 @@ import pathlib
 
 from . import MMA, WGMMA
 
-path = pathlib.Path(__file__).parent / "impl/nv_hopper.so"
+path = pathlib.Path(__file__).parent / "kernels/hopper.so"
 lib = ctypes.CDLL(str(path))
 
 # sm_90 f64
@@ -43,7 +43,7 @@ lib.wgmma_m64n8k32_f16_e5m2_e4m3.argtypes = [ctypes.c_void_p] * 3
 lib.wgmma_m64n8k32_f16_e4m3_e5m2.argtypes = [ctypes.c_void_p] * 3
 lib.wgmma_m64n8k32_f16_e4m3_e4m3.argtypes = [ctypes.c_void_p] * 3
 
-mma_kernel_impls = {
+mma_cuda_kernels = {
     # sm_90 f64
     "m16n8k16.f64.f64.f64.f64": lib.mma_m16n8k16_f64_f64_f64_f64,
     "m16n8k8.f64.f64.f64.f64": lib.mma_m16n8k8_f64_f64_f64_f64,
@@ -63,7 +63,7 @@ mma_kernel_impls = {
     "m16n8k8.f32.f16.f16.f32": lib.mma_m16n8k8_f32_f16_f16_f32,
     "m16n8k8.f16.f16.f16.f16": lib.mma_m16n8k8_f16_f16_f16_f16,
 }
-wgmma_kernel_impls = {
+wgmma_cuda_kernels = {
     # sm_90a tf32
     "m64n8k8.f32.tf32.tf32": lib.wgmma_m64n8k8_f32_tf32_tf32,
     # sm_90a f16
@@ -84,10 +84,10 @@ wgmma_kernel_impls = {
 }
 
 mma_kernels = {
-    shape_and_type: MMA("Hopper", shape_and_type, mma_kernel_impls[shape_and_type])
-    for shape_and_type in mma_kernel_impls
+    shape_and_type: MMA("Hopper", shape_and_type, mma_cuda_kernels[shape_and_type])
+    for shape_and_type in mma_cuda_kernels
 }
 wgmma_kernels = {
-    shape_and_type: WGMMA("Hopper", shape_and_type, wgmma_kernel_impls[shape_and_type])
-    for shape_and_type in wgmma_kernel_impls
+    shape_and_type: WGMMA("Hopper", shape_and_type, wgmma_cuda_kernels[shape_and_type])
+    for shape_and_type in wgmma_cuda_kernels
 }

@@ -5,8 +5,8 @@ from ..arithmetic import fma, fdpa, ftz_mul_add
 
 
 class MFMA(isa_mfma.MFMA):
-    def __init__(self, arch: str, shape_and_type: str):
-        super().__init__(arch, shape_and_type)
+    def __init__(self, arch: str, suffix: str):
+        super().__init__(arch, suffix)
         if self.a_type in [torch.float64, torch.float32] and not self.suffix.endswith(
             "xf32"
         ):

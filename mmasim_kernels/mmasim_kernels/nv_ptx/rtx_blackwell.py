@@ -3,7 +3,7 @@ import pathlib
 
 from . import MMA, MMABlockScale
 
-path = pathlib.Path(__file__).parent / "impl/nv_rtxblackwell.so"
+path = pathlib.Path(__file__).parent / "kernels/rtx_blackwell.so"
 lib = ctypes.CDLL(str(path))
 
 # sm_120a f8f6f4
@@ -62,7 +62,7 @@ lib.mma_m16n8k64_mxf4nvf4_block16_f32_e2m1_e2m1_f32_ue4m3.argtypes = [
     ctypes.c_void_p
 ] * 6
 
-mma_kernel_impls = {
+mma_cuda_kernels = {
     # sm_120a f8f6f4
     "m16n8k32.f8f6f4.f32.e5m2.e5m2.f32": lib.mma_m16n8k32_f8f6f4_f32_e5m2_e5m2_f32,
     "m16n8k32.f8f6f4.f32.e4m3.e4m3.f32": lib.mma_m16n8k32_f8f6f4_f32_e4m3_e4m3_f32,
@@ -103,7 +103,7 @@ mma_kernel_impls = {
     "m16n8k8.f32.f16.f16.f32": lib.mma_m16n8k8_f32_f16_f16_f32,
     "m16n8k8.f16.f16.f16.f16": lib.mma_m16n8k8_f16_f16_f16_f16,
 }
-mma_block_scale_kernel_impls = {
+mma_block_scale_cuda_kernels = {
     # sm_120a mxf8f6f4
     "m16n8k32.mxf8f6f4.block32.f32.e5m2.e5m2.f32.ue8m0": lib.mma_m16n8k32_mxf8f6f4_block32_f32_e5m2_e5m2_f32_ue8m0,
     "m16n8k32.mxf8f6f4.block32.f32.e4m3.e4m3.f32.ue8m0": lib.mma_m16n8k32_mxf8f6f4_block32_f32_e4m3_e4m3_f32_ue8m0,
@@ -115,13 +115,13 @@ mma_block_scale_kernel_impls = {
 
 mma_kernels = {
     shape_and_type: MMA(
-        "RTX Blackwell", shape_and_type, mma_kernel_impls[shape_and_type]
+        "RTX Blackwell", shape_and_type, mma_cuda_kernels[shape_and_type]
     )
-    for shape_and_type in mma_kernel_impls
+    for shape_and_type in mma_cuda_kernels
 }
 mma_block_scale_kernels = {
     shape_and_type: MMABlockScale(
-        "RTX Blackwell", shape_and_type, mma_block_scale_kernel_impls[shape_and_type]
+        "RTX Blackwell", shape_and_type, mma_block_scale_cuda_kernels[shape_and_type]
     )
-    for shape_and_type in mma_block_scale_kernel_impls
+    for shape_and_type in mma_block_scale_cuda_kernels
 }

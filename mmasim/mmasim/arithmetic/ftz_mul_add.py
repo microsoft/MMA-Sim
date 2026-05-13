@@ -27,28 +27,22 @@ def ftz_add(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     return flush_subnormal(x.float() + y.float(), keep_sign=True)
 
 
-def dpa_on_ftz_mul_add(
-    a: torch.Tensor, b: torch.Tensor, c: torch.Tensor, P: int
-) -> torch.Tensor:
-    assert P in [2, 4]
-    product = ftz_mul(a, b)
-    c = flush_subnormal(c, keep_sign=False)
-    for i in range(0, len(a), P):
-        s = ftz_add(product[i], product[i + 1])
-        if P == 4:
-            s2 = ftz_add(product[i + 2], product[i + 3])
-            s = ftz_add(s, s2)
-        c = ftz_add(c, s)
-    return c
-
-
 class MMA_FTZ_MUL_ADD(MMAOperation):
     def __init__(self, P: int):
         super().__init__()
+        assert P in [2, 4]
         self.P = P
 
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-        return dpa_on_ftz_mul_add(a, b, c, self.P)
+        product = ftz_mul(a, b)
+        c = flush_subnormal(c, keep_sign=False)
+        for i in range(0, len(a), self.P):
+            s = ftz_add(product[i], product[i + 1])
+            if self.P == 4:
+                s2 = ftz_add(product[i + 2], product[i + 3])
+                s = ftz_add(s, s2)
+            c = ftz_add(c, s)
+        return c
 
     def __call__(
         self,
