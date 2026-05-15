@@ -1,7 +1,7 @@
 import torch
 
 from .. import MMAOperation
-from .common import dtype_min_exponent
+from .helper import dtype_min_exponent
 
 
 def flush_subnormal(x: torch.Tensor, keep_sign: bool = False) -> torch.Tensor:
