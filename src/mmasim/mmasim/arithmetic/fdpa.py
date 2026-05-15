@@ -98,7 +98,7 @@ class MMA_T_FDPA(MMAOperation):
         L = min(len(a), self.L_max)
         for i in range(0, len(a), L):
             c = t_fdpa(
-                a[i * L : (i + 1) * L], b[i * L : (i + 1) * L], c, self.F, self.rho
+                a[i : i + L], b[i : i + L], c, self.F, self.rho
             )
         return c
 
@@ -153,8 +153,8 @@ class MMA_ST_FDPA(MMABlockScaleOperation):
         L = min(len(a), self.L_max)
         for i in range(0, len(a), L):
             c = st_fdpa(
-                a[i * L : (i + 1) * L],
-                b[i * L : (i + 1) * L],
+                a[i : i + L],
+                b[i : i + L],
                 c,
                 alpha,
                 beta,
