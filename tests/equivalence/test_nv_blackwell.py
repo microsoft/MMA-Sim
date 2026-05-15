@@ -5,7 +5,7 @@ from mmasim_kernels.nv_ptx.blackwell import (
 )
 from mmasim.nv_ptx import MMA, TCGen05MMA, TCGen05MMABlockScale
 
-from . import random_test
+from helper import random_test
 
 
 def test_nv_blackwell(trials: int = 100):

@@ -64,10 +64,10 @@ lib.mma_m16n8k64_mxf4nvf4_block16_f32_e2m1_e2m1_f32_ue4m3.argtypes = [
 
 mma_cuda_kernels = {
     # sm_120a f8f6f4
-    "m16n8k32.f8f6f4.f32.e5m2.e5m2.f32": lib.mma_m16n8k32_f8f6f4_f32_e5m2_e5m2_f32,
-    "m16n8k32.f8f6f4.f32.e4m3.e4m3.f32": lib.mma_m16n8k32_f8f6f4_f32_e4m3_e4m3_f32,
-    "m16n8k32.f8f6f4.f16.e5m2.e5m2.f16": lib.mma_m16n8k32_f8f6f4_f16_e5m2_e5m2_f16,
-    "m16n8k32.f8f6f4.f16.e4m3.e4m3.f16": lib.mma_m16n8k32_f8f6f4_f16_e4m3_e4m3_f16,
+    "m16n8k32.f32.e5m2.e5m2.f32": lib.mma_m16n8k32_f8f6f4_f32_e5m2_e5m2_f32,
+    "m16n8k32.f32.e4m3.e4m3.f32": lib.mma_m16n8k32_f8f6f4_f32_e4m3_e4m3_f32,
+    "m16n8k32.f16.e5m2.e5m2.f16": lib.mma_m16n8k32_f8f6f4_f16_e5m2_e5m2_f16,
+    "m16n8k32.f16.e4m3.e4m3.f16": lib.mma_m16n8k32_f8f6f4_f16_e4m3_e4m3_f16,
     # sm_89 fp8 m16n8k32 f32_output
     "m16n8k32.f32.e5m2.e5m2.f32": lib.mma_m16n8k32_f32_e5m2_e5m2_f32,
     "m16n8k32.f32.e5m2.e4m3.f32": lib.mma_m16n8k32_f32_e5m2_e4m3_f32,
@@ -105,12 +105,11 @@ mma_cuda_kernels = {
 }
 mma_block_scale_cuda_kernels = {
     # sm_120a mxf8f6f4
-    "m16n8k32.mxf8f6f4.block32.f32.e5m2.e5m2.f32.ue8m0": lib.mma_m16n8k32_mxf8f6f4_block32_f32_e5m2_e5m2_f32_ue8m0,
-    "m16n8k32.mxf8f6f4.block32.f32.e4m3.e4m3.f32.ue8m0": lib.mma_m16n8k32_mxf8f6f4_block32_f32_e4m3_e4m3_f32_ue8m0,
+    "m16n8k32.block32.f32.e5m2.e5m2.f32.ue8m0": lib.mma_m16n8k32_mxf8f6f4_block32_f32_e5m2_e5m2_f32_ue8m0,
+    "m16n8k32.block32.f32.e4m3.e4m3.f32.ue8m0": lib.mma_m16n8k32_mxf8f6f4_block32_f32_e4m3_e4m3_f32_ue8m0,
     # sm_120a mxf4 and nvf4
-    "m16n8k64.mxf4.block32.f32.e2m1.e2m1.f32.ue8m0": lib.mma_m16n8k64_mxf4_block32_f32_e2m1_e2m1_f32_ue8m0,
-    "m16n8k64.mxf4nvf4.block32.f32.e2m1.e2m1.f32.ue8m0": lib.mma_m16n8k64_mxf4nvf4_block32_f32_e2m1_e2m1_f32_ue8m0,
-    "m16n8k64.mxf4nvf4.block16.f32.e2m1.e2m1.f32.ue4m3": lib.mma_m16n8k64_mxf4nvf4_block16_f32_e2m1_e2m1_f32_ue4m3,
+    "m16n8k64.block32.f32.e2m1.e2m1.f32.ue8m0": lib.mma_m16n8k64_mxf4nvf4_block32_f32_e2m1_e2m1_f32_ue8m0,
+    "m16n8k64.block16.f32.e2m1.e2m1.f32.ue4m3": lib.mma_m16n8k64_mxf4nvf4_block16_f32_e2m1_e2m1_f32_ue4m3,
 }
 
 mma_kernels = {

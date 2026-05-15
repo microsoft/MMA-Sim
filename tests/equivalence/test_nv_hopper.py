@@ -1,7 +1,7 @@
 from mmasim_kernels.nv_ptx.hopper import mma_kernels, wgmma_kernels
 from mmasim.nv_ptx import MMA, WGMMA
 
-from . import random_test
+from helper import random_test
 
 
 def test_nv_hopper(trials: int = 100):

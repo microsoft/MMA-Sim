@@ -138,12 +138,12 @@ class MMABlockScaleKernel(mmasim.MMABlockScaleOperation):
         A = torch.zeros([m, k // packing], dtype=self.a_type)
         B_T = torch.zeros([n, k // packing], dtype=self.b_type)
         C = torch.zeros([m, n], dtype=self.c_type)
-        alpha = torch.ones([m, k // block_size], dtype=self.s_type)
-        beta = torch.ones([n, k // block_size], dtype=self.s_type)
+        scale_A = torch.ones([m, k // block_size], dtype=self.s_type)
+        scale_B = torch.ones([n, k // block_size], dtype=self.s_type)
         A[0, : len(a)] = a
         B_T[0, : len(b)] = b
         C[0, 0] = c
-        alpha[0, : len(alpha)] = alpha
-        beta[0, : len(beta)] = beta
-        D = self(A, B_T.T, C, alpha, beta.T)
+        scale_A[0, : len(alpha)] = alpha
+        scale_B[0, : len(beta)] = beta
+        D = self(A, B_T.T, C, scale_A, scale_B.T)
         return D[0, 0]

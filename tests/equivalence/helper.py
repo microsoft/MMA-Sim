@@ -48,7 +48,11 @@ def random_test(
         B = B_T.T
         C = (
             torch.randint(
-                -(2**31), 2**31, [m * n * c_type.itemsize // 4], dtype=torch.int32, device="cuda"
+                -(2**31),
+                2**31,
+                [m * n * c_type.itemsize // 4],
+                dtype=torch.int32,
+                device="cuda",
             )
             .view(c_type)
             .view(m, n)

@@ -1,7 +1,7 @@
 from mmasim_kernels.nv_ptx.rtx_blackwell import mma_kernels, mma_block_scale_kernels
 from mmasim.nv_ptx import MMA, MMABlockScale
 
-from . import random_test
+from helper import random_test
 
 
 def test_nv_rtx_blackwell(trials: int = 100):
@@ -14,7 +14,7 @@ def test_nv_rtx_blackwell(trials: int = 100):
             trials=trials,
         )
     for shape_and_type, kernel in mma_block_scale_kernels.items():
-        print(f"Testing RTX Blackwell instruction mma_block_scale.{shape_and_type}")
+        print(f"Testing RTX Blackwell instruction mma.{shape_and_type}")
         random_test(
             MMABlockScale("RTX Blackwell", shape_and_type),
             kernel,

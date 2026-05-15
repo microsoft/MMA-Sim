@@ -1,7 +1,7 @@
 from mmasim_kernels.nv_ptx.turing import mma_kernels
 from mmasim.nv_ptx import MMA
 
-from . import random_test
+from helper import random_test
 
 
 def test_nv_turing(trials: int = 100):

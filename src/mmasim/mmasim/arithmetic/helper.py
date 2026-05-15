@@ -5,7 +5,7 @@ dtype_min_exponent = {
     torch.float32: -126,
     torch.float16: -14,
     torch.bfloat16: -126,
-    # torch.float8_e8m0fnu: -127,
+    torch.float8_e8m0fnu: -127,
     torch.float8_e5m2: -14,
     torch.float8_e4m3fn: -6,
     torch.float8_e5m2fnuz: -15,
@@ -32,7 +32,7 @@ fp4_value_table = torch.tensor(
         -4.0,
         -6.0,
     ],
-    dtype=torch.float8_e4m3fn,
+    dtype=torch.float16,
 )
 
 
@@ -43,9 +43,16 @@ def truncate_fp32_to_tf32(x: torch.Tensor) -> torch.Tensor:
     return x.view(torch.float32)
 
 
+def truncate_e4m3_to_ue4m3(x: torch.Tensor) -> torch.Tensor:
+    assert x.dtype == torch.float8_e4m3fn
+    x = x.view(torch.uint8)
+    x &= 0x7F
+    return x.view(torch.float8_e4m3fn)
+
+
 def unpack_uint8_to_fp4(x: torch.Tensor) -> torch.Tensor:
     assert x.dtype == torch.uint8
     high = x >> 4
     low = x & 0x0F
     unpacked = torch.stack([high, low], dim=-1).view(x.shape[:-1] + (-1,))
-    return fp4_value_table[unpacked]
+    return fp4_value_table.to(x.device)[unpacked.int()]

@@ -8,7 +8,7 @@ nv_torch_dtype = {
     "bf16": torch.bfloat16,
     "e4m3": torch.float8_e4m3fn,
     "e5m2": torch.float8_e5m2,
-    # "ue8m0": torch.float8_e8m0fnu,
+    "ue8m0": torch.float8_e8m0fnu,
     "ue4m3": torch.float8_e4m3fn,
     "e2m1": torch.uint8,  # torch.float4_e2m1fn_x2 is not well-implemented
 }

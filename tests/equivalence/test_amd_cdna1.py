@@ -1,14 +1,14 @@
-from mmasim_kernels.amd.cdna3 import mfma_kernels
+from mmasim_kernels.amd.cdna1 import mfma_kernels
 from mmasim.amd import MFMA
 
-from . import random_test
+from helper import random_test
 
 
-def test_amd_cdna3(trials: int = 100):
+def test_amd_cdna1(trials: int = 100):
     for suffix, kernel in mfma_kernels.items():
-        print(f"Testing CDNA3 instruction mfma_{suffix}")
+        print(f"Testing CDNA1 instruction mfma_{suffix}")
         random_test(
-            MFMA("CDNA3", suffix),
+            MFMA("CDNA1", suffix),
             kernel,
             allow_different_nan=True,
             trials=trials,
@@ -17,4 +17,4 @@ def test_amd_cdna3(trials: int = 100):
 
 
 if __name__ == "__main__":
-    test_amd_cdna3()
+    test_amd_cdna1()
