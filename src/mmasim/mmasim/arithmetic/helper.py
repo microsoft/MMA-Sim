@@ -1,11 +1,11 @@
 import torch
 
-dtype_min_exponent = {
+dtype_subnormal_exponent = {
     torch.float64: -1022,
     torch.float32: -126,
     torch.float16: -14,
     torch.bfloat16: -126,
-    torch.float8_e8m0fnu: -127,
+    # torch.float8_e8m0fnu: -127,
     torch.float8_e5m2: -14,
     torch.float8_e4m3fn: -6,
     torch.float8_e5m2fnuz: -15,

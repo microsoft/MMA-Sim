@@ -1,11 +1,11 @@
 import torch
 
 from .. import MMAOperation
-from .helper import dtype_min_exponent
+from .helper import dtype_subnormal_exponent
 
 
 def flush_subnormal(x: torch.Tensor, keep_sign: bool = False) -> torch.Tensor:
-    min_exponent = dtype_min_exponent[x.dtype]
+    min_exponent = dtype_subnormal_exponent[x.dtype]
     if keep_sign:
         x[x.abs() < 2.0**min_exponent] *= 0.0
     else:
