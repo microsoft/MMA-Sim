@@ -337,13 +337,15 @@ def tr_fdpa(
     sa, ea = frexp_and_normalize(a)
     sb, eb = frexp_and_normalize(b)
     s, e = sa * sb, ea + eb
-    overflow = ((s.abs()>=2.0) + e) >= 128
+    overflow = ((s.abs() >= 2.0) + e) >= 128
     s[overflow] *= float("inf")
     sum, max_e = truncated_fused_sum(s, e, F)
     sc, ec = frexp_and_normalize(c)
     E = torch.max(max_e, ec)  # -126*2 <= max_e, ec <= 127*2
     sum = torch.floor(sum * pow2(max_e.double() - E + F2)) * 2.0**-F2
     sum += torch.floor(sc * pow2(ec.double() - E + F)) * 2.0**-F
+    sum, E = frexp_and_normalize(sum * pow2(E))
+    sum = torch.floor(sum * 2.0**F2) * 2.0**-F2
     return ldexp_and_normalize(sum, E, rho)
 
 
@@ -398,7 +400,10 @@ def gtr_fdpa(
     sum = torch.floor(sum * pow2(e_max.double() - E + F2)) * 2.0**-F2
     sc = torch.floor(sc * pow2(ec.double() - E + F)) * 2.0**-F
     sc[ec < E - F - 1] = 0.0
-    return ldexp_and_normalize(sum + sc, E, rho)
+    sum += sc
+    sum, E = frexp_and_normalize(sum * pow2(E))
+    sum = torch.floor(sum * 2.0**F2) * 2.0**-F2
+    return ldexp_and_normalize(sum, E, rho)
 
 
 class MMA_GTR_FDPA(MMAOperation):
