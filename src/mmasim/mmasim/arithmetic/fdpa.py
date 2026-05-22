@@ -75,22 +75,22 @@ def truncated_fused_sum(
 ) -> tuple[DoubleTensor, IntTensor]:
     # -126*2 <= e <= 127*2
     e[s == 0.0] = -126  # TODO: handle zero
-    max_e = max(e)
-    s = torch.trunc(s * pow2(e.double() - max_e + F)) * 2.0**-F
+    e_max = max(e)
+    s = torch.trunc(s * pow2(e.double() - e_max + F)) * 2.0**-F
     sum = s.sum()
-    return sum, max_e
+    return sum, e_max
 
 
 def t_fdpa(
     a: torch.Tensor, b: torch.Tensor, c: torch.Tensor, F: int, rho: str
 ) -> torch.Tensor:
-    sa, ea = frexp_and_normalize(a)
-    sb, eb = frexp_and_normalize(b)
-    sc, ec = frexp_and_normalize(c)
-    s = torch.cat([sa * sb, sc.unsqueeze(0)])
-    e = torch.cat([ea + eb, ec.unsqueeze(0)])
-    sum, max_e = truncated_fused_sum(s, e, F)
-    return ldexp_and_normalize(sum, max_e, rho)
+    s_a, e_a = frexp_and_normalize(a)
+    s_b, e_b = frexp_and_normalize(b)
+    s_c, e_c = frexp_and_normalize(c)
+    s = torch.cat([s_a * s_b, s_c.unsqueeze(0)])
+    e = torch.cat([e_a + e_b, e_c.unsqueeze(0)])
+    sum, e_max = truncated_fused_sum(s, e, F)
+    return ldexp_and_normalize(sum, e_max, rho)
 
 
 class MMA_T_FDPA(MMAOperation):
@@ -129,16 +129,16 @@ def st_fdpa(
     F: int,
     rho: str,
 ) -> torch.Tensor:
-    sa, ea = frexp_and_normalize(a)
-    sb, eb = frexp_and_normalize(b)
-    sc, ec = frexp_and_normalize(c)
+    s_a, e_a = frexp_and_normalize(a)
+    s_b, e_b = frexp_and_normalize(b)
+    s_c, e_c = frexp_and_normalize(c)
     s_alpha, e_alpha = frexp_and_normalize(alpha)
     s_beta, e_beta = frexp_and_normalize(beta)
     # s_alpha, s_beta can be 1.0 or nan
-    s = torch.cat([sa * sb * s_alpha * s_beta, sc.unsqueeze(0)])
-    e = torch.cat([ea + eb + e_alpha + e_beta, ec.unsqueeze(0)])
-    sum, max_e = truncated_fused_sum(s, e, F)
-    return ldexp_and_normalize(sum, max_e, rho)
+    s = torch.cat([s_a * s_b * s_alpha * s_beta, s_c.unsqueeze(0)])
+    e = torch.cat([e_a + e_b + e_alpha + e_beta, e_c.unsqueeze(0)])
+    sum, e_max = truncated_fused_sum(s, e, F)
+    return ldexp_and_normalize(sum, e_max, rho)
 
 
 class MMA_ST_FDPA(MMABlockScaleOperation):
@@ -208,11 +208,11 @@ def gst_fdpa(
     beta = torch.repeat_interleave(beta, K_block // G)
     s_alpha, e_alpha = frexp_and_normalize(alpha)
     s_beta, e_beta = frexp_and_normalize(beta)
-    sc, ec = frexp_and_normalize(c)
-    s = torch.cat([p * s_alpha * s_beta, sc.unsqueeze(0)])
-    e = torch.cat([e_alpha + e_beta, ec.unsqueeze(0)])
-    sum, max_e = truncated_fused_sum(s, e, F)
-    return ldexp_and_normalize(sum, max_e, rho)
+    s_c, e_c = frexp_and_normalize(c)
+    s = torch.cat([p * s_alpha * s_beta, s_c.unsqueeze(0)])
+    e = torch.cat([e_alpha + e_beta, e_c.unsqueeze(0)])
+    sum, e_max = truncated_fused_sum(s, e, F)
+    return ldexp_and_normalize(sum, e_max, rho)
 
 
 class MMA_GST_FDPA(MMABlockScaleOperation):
@@ -276,11 +276,11 @@ class MMA_GST_FDPA(MMABlockScaleOperation):
 
 
 def e_fdpa(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-    sa, ea = frexp_and_normalize(a)
-    sb, eb = frexp_and_normalize(b)
-    sc, ec = frexp_and_normalize(c)
-    s = torch.cat([sa * sb, sc.unsqueeze(0)])
-    e = torch.cat([ea + eb, ec.unsqueeze(0)])
+    s_a, e_a = frexp_and_normalize(a)
+    s_b, e_b = frexp_and_normalize(b)
+    s_c, e_c = frexp_and_normalize(c)
+    s = torch.cat([s_a * s_b, s_c.unsqueeze(0)])
+    e = torch.cat([e_a + e_b, e_c.unsqueeze(0)])
     has_inf_nan = s.sum()
     if has_inf_nan.isinf() or has_inf_nan.isnan():
         return has_inf_nan
@@ -334,19 +334,19 @@ class MMA_E_FDPA(MMAOperation):
 def tr_fdpa(
     a: torch.Tensor, b: torch.Tensor, c: torch.Tensor, F: int, F2: int, rho: str
 ) -> torch.Tensor:
-    sa, ea = frexp_and_normalize(a)
-    sb, eb = frexp_and_normalize(b)
-    s, e = sa * sb, ea + eb
+    s_a, e_a = frexp_and_normalize(a)
+    s_b, e_b = frexp_and_normalize(b)
+    s, e = s_a * s_b, e_a + e_b
     overflow = ((s.abs() >= 2.0) + e) >= 128
     s[overflow] *= float("inf")
-    sum, max_e = truncated_fused_sum(s, e, F)
-    sc, ec = frexp_and_normalize(c)
-    E = torch.max(max_e, ec)  # -126*2 <= max_e, ec <= 127*2
-    sum = torch.floor(sum * pow2(max_e.double() - E + F2)) * 2.0**-F2
-    sum += torch.floor(sc * pow2(ec.double() - E + F)) * 2.0**-F
-    sum, E = frexp_and_normalize(sum * pow2(E))
+    s_dot, e_dot = truncated_fused_sum(s, e, F)  # -126*2 <= e_dot <= 127*2
+    s_c, e_c = frexp_and_normalize(c)  # -126 <= e_c <= 127
+    e_max = torch.max(e_dot, e_c)
+    s_dot = torch.floor(s_dot * pow2(e_dot.double() - e_max + 52)) * 2.0**-52  # 52 > F2
+    s_c = torch.floor(s_c * pow2(e_c.double() - e_max + F)) * 2.0**-F
+    sum, e_max = frexp_and_normalize((s_dot + s_c) * pow2(e_max.double()))
     sum = torch.floor(sum * 2.0**F2) * 2.0**-F2
-    return ldexp_and_normalize(sum, E, rho)
+    return ldexp_and_normalize(sum, e_max, rho)
 
 
 class MMA_TR_FDPA(MMAOperation):
@@ -388,22 +388,21 @@ def gtr_fdpa(
     F2: int,
     rho: str,
 ) -> torch.Tensor:
-    sa, ea = frexp_and_normalize(a)
-    sb, eb = frexp_and_normalize(b)
-    s0, e0 = truncated_fused_sum(sa[::2] * sb[::2], ea[::2] + eb[::2], F)
-    s1, e1 = truncated_fused_sum(sa[1::2] * sb[1::2], ea[1::2] + eb[1::2], F)
-    e_max = torch.max(e0, e1)  # -14*2 <= e0, e1 <= 15*2
-    sum = torch.floor(s0 * pow2(e0 - e_max + F)) * 2.0**-F
-    sum += torch.floor(s1 * pow2(e1 - e_max + F)) * 2.0**-F
-    sc, ec = frexp_and_normalize(c)
-    E = torch.max(e_max, ec)  # -126 <= e_max, ec <= 127
-    sum = torch.floor(sum * pow2(e_max.double() - E + F2)) * 2.0**-F2
-    sc = torch.floor(sc * pow2(ec.double() - E + F)) * 2.0**-F
-    sc[ec < E - F - 1] = 0.0
-    sum += sc
-    sum, E = frexp_and_normalize(sum * pow2(E))
-    sum = torch.floor(sum * 2.0**F2) * 2.0**-F2
-    return ldexp_and_normalize(sum, E, rho)
+    s_a, e_a = frexp_and_normalize(a)
+    s_b, e_b = frexp_and_normalize(b)
+    s_even, e_even = truncated_fused_sum(s_a[::2] * s_b[::2], e_a[::2] + e_b[::2], F)
+    s_odd, e_odd = truncated_fused_sum(s_a[1::2] * s_b[1::2], e_a[1::2] + e_b[1::2], F)
+    e_dot = torch.max(e_even, e_odd)  # -15*2 <= e_even, e_odd <= 15*2
+    s_dot = torch.floor(s_even * pow2(e_even - e_dot + F)) * 2.0**-F
+    s_dot += torch.floor(s_odd * pow2(e_odd - e_dot + F)) * 2.0**-F
+    s_c, e_c = frexp_and_normalize(c)  # -126 <= e_c <= 127
+    e_max = torch.max(e_dot, e_c)
+    s_dot = torch.floor(s_dot * pow2(e_dot.double() - e_max + 52)) * 2.0**-52  # 52 > F2
+    s_c = torch.floor(s_c * pow2(e_c.double() - e_max + F)) * 2.0**-F
+    s_c[e_c < e_max - F - 1] = 0.0
+    s_dot, e_max = frexp_and_normalize((s_dot + s_c) * pow2(e_max))
+    s_dot = torch.floor(s_dot * 2.0**F2) * 2.0**-F2
+    return ldexp_and_normalize(s_dot, e_max, rho)
 
 
 class MMA_GTR_FDPA(MMAOperation):
