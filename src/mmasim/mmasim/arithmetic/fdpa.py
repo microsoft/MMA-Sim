@@ -28,8 +28,7 @@ def frexp_and_normalize(
         s, e = torch.frexp(x)
     else:
         s, e = torch.frexp(x.float())
-    s *= 2  # let 1 <= |s| < 2
-    e -= 1
+    s, e = s * 2, e - 1  # let 1 <= |s| < 2
     # handle subnormal
     if e_subnormal is None:
         e_subnormal = dtype_subnormal_exponent[x.dtype]
@@ -42,24 +41,16 @@ def frexp_and_normalize(
 
 
 def ldexp_and_normalize(s: DoubleTensor, e: IntTensor, rho: str) -> torch.Tensor:
-    if torch.isnan(s):
-        if rho == "RNE-FP16":
-            return torch.tensor(0x7FFF, dtype=torch.int16).view(torch.float16)
-        else:
-            return torch.tensor(0x7FFFFFFF, dtype=torch.int32).view(torch.float32)
-    elif torch.isinf(s):
-        return s.to(torch.float16 if rho == "RNE-FP16" else torch.float32)
-
     if rho == "RNE-FP16":
         # -14 <= e < 15*2
         # note that direcctly converting FP64 to FP16 can be incorrect
         # as PyTorch-CPU computes FP64 -> FP32 -> FP16 internally
         s, e = frexp_and_normalize(s * pow2(e), e_subnormal=-14)
         s = torch.round(s * 2.0**10) * 2.0**-10  # RNE
-        return (s * pow2(e)).to(torch.float16)
+        res = (s * pow2(e)).to(torch.float16)
     elif rho == "RNE-FP32":
         # -126 <= e <= 127*2
-        return (s * pow2(e.double())).to(torch.float32)
+        res = (s * pow2(e.double())).to(torch.float32)
     else:  # RZ
         # -126 <= e <= 127*2
         s, e = frexp_and_normalize(s * pow2(e.double()), e_subnormal=-126)
@@ -67,7 +58,17 @@ def ldexp_and_normalize(s: DoubleTensor, e: IntTensor, rho: str) -> torch.Tensor
             s = torch.trunc(s * 2.0**13) * 2.0**-13  # RZ
         else:  # "RZ-FP32"
             s = torch.trunc(s * 2.0**23) * 2.0**-23  # RZ
-        return (s * pow2(e.double())).to(torch.float32)
+        res = (s * pow2(e.double())).to(torch.float32)
+    nans = res.isnan()
+    if res.dtype == torch.float16:
+        res = res.view(torch.int16)
+        res[nans] = 0x7FFF
+        res = res.view(torch.float16)
+    else:  # torch.float32
+        res = res.view(torch.int32)
+        res[nans] = 0x7FFFFFFF
+        res = res.view(torch.float32)
+    return res
 
 
 def truncated_fused_sum(
@@ -75,20 +76,25 @@ def truncated_fused_sum(
 ) -> tuple[DoubleTensor, IntTensor]:
     # -126*2 <= e <= 127*2
     e[s == 0.0] = -126  # TODO: handle zero
-    e_max = max(e)
-    s = torch.trunc(s * pow2(e.double() - e_max + F)) * 2.0**-F
-    sum = s.sum()
+    e_max = e.max(dim=-1).values
+    delta_e = e.double() - e_max.unsqueeze(-1)
+    s = torch.trunc(s * pow2(delta_e + F)) * 2.0**-F
+    sum = s.sum(dim=-1)
     return sum, e_max
 
 
 def t_fdpa(
-    a: torch.Tensor, b: torch.Tensor, c: torch.Tensor, F: int, rho: str
-) -> torch.Tensor:
+    a: torch.Tensor,  # [..., K]
+    b: torch.Tensor,  # [..., K]
+    c: torch.Tensor,  # [...]
+    F: int,
+    rho: str,
+) -> torch.Tensor:  # [...]
     s_a, e_a = frexp_and_normalize(a)
     s_b, e_b = frexp_and_normalize(b)
     s_c, e_c = frexp_and_normalize(c)
-    s = torch.cat([s_a * s_b, s_c.unsqueeze(0)])
-    e = torch.cat([e_a + e_b, e_c.unsqueeze(0)])
+    s = torch.cat([s_a * s_b, s_c.unsqueeze(-1)], dim=-1)
+    e = torch.cat([e_a + e_b, e_c.unsqueeze(-1)], dim=-1)
     sum, e_max = truncated_fused_sum(s, e, F)
     return ldexp_and_normalize(sum, e_max, rho)
 
@@ -103,40 +109,38 @@ class MMA_T_FDPA(MMAOperation):
         if a.dtype == torch.float32:  # tf32
             a = truncate_fp32_to_tf32(a)
             b = truncate_fp32_to_tf32(b)
-        L = min(len(a), self.L_max)
-        for i in range(0, len(a), L):
-            c = t_fdpa(a[i : i + L], b[i : i + L], c, self.F, self.rho)
+        K = a.shape[-1]
+        L = min(K, self.L_max)
+        for i in range(0, K, L):
+            c = t_fdpa(a[..., i : i + L], b[..., i : i + L], c, self.F, self.rho)
         return c
 
     def __call__(
         self, A: torch.Tensor, B: torch.Tensor, C: torch.Tensor
     ) -> torch.Tensor:
         m, n = C.shape
-        dtype = torch.float16 if self.rho.endswith("FP16") else torch.float32
-        D = torch.zeros((m, n), dtype=dtype)
-        for i in range(m):
-            for j in range(n):
-                D[i, j] = self.dpa(A[i, :], B[:, j], C[i, j])
-        return D
+        a_vectors = A[:, None, :].expand(-1, n, -1)
+        b_vectors = B.T[None, :, :].expand(m, -1, -1)
+        return self.dpa(a_vectors, b_vectors, C)
 
 
 def st_fdpa(
-    a: torch.Tensor,
-    b: torch.Tensor,
-    c: torch.Tensor,
-    alpha: torch.Tensor,
-    beta: torch.Tensor,
+    a: torch.Tensor,  # [..., K]
+    b: torch.Tensor,  # [..., K]
+    c: torch.Tensor,  # [...]
+    alpha: torch.Tensor,  # [..., 1]
+    beta: torch.Tensor,  # [..., 1]
     F: int,
     rho: str,
-) -> torch.Tensor:
+) -> torch.Tensor:  # [...]
     s_a, e_a = frexp_and_normalize(a)
     s_b, e_b = frexp_and_normalize(b)
     s_c, e_c = frexp_and_normalize(c)
     s_alpha, e_alpha = frexp_and_normalize(alpha)
     s_beta, e_beta = frexp_and_normalize(beta)
     # s_alpha, s_beta can be 1.0 or nan
-    s = torch.cat([s_a * s_b * s_alpha * s_beta, s_c.unsqueeze(0)])
-    e = torch.cat([e_a + e_b + e_alpha + e_beta, e_c.unsqueeze(0)])
+    s = torch.cat([s_a * s_b * s_alpha * s_beta, s_c.unsqueeze(-1)], dim=-1)
+    e = torch.cat([e_a + e_b + e_alpha + e_beta, e_c.unsqueeze(-1)], dim=-1)
     sum, e_max = truncated_fused_sum(s, e, F)
     return ldexp_and_normalize(sum, e_max, rho)
 
@@ -155,11 +159,12 @@ class MMA_ST_FDPA(MMABlockScaleOperation):
         alpha: torch.Tensor,
         beta: torch.Tensor,
     ) -> torch.Tensor:
-        L = min(len(a), self.L_max)
-        for i in range(0, len(a), L):
+        K = a.shape[-1]
+        L = min(K, self.L_max)
+        for i in range(0, K, L):
             c = st_fdpa(
-                a[i : i + L],
-                b[i : i + L],
+                a[..., i : i + L],
+                b[..., i : i + L],
                 c,
                 alpha,
                 beta,
@@ -177,40 +182,34 @@ class MMA_ST_FDPA(MMABlockScaleOperation):
         beta: torch.Tensor,
     ) -> torch.Tensor:
         m, n = C.shape
-        dtype = torch.float16 if self.rho.endswith("FP16") else torch.float32
-        D = torch.zeros((m, n), dtype=dtype)
-        for i in range(m):
-            for j in range(n):
-                D[i, j] = self.dpa(
-                    A[i, :],
-                    B[:, j],
-                    C[i, j],
-                    alpha[i, :],
-                    beta[:, j],
-                )
-        return D
+        m, n = C.shape
+        a_vectors = A[:, None, :].expand(-1, n, -1)
+        b_vectors = B.T[None, :, :].expand(m, -1, -1)
+        alpha_vectors = alpha[:, None, :].expand(-1, n, -1)
+        beta_vectors = beta.T[None, :, :].expand(m, -1, -1)
+        return self.dpa(a_vectors, b_vectors, C, alpha_vectors, beta_vectors)
 
 
 def gst_fdpa(
-    a: torch.Tensor,
-    b: torch.Tensor,
-    c: torch.Tensor,
-    alpha: torch.Tensor,
-    beta: torch.Tensor,
+    a: torch.Tensor,  # [..., K]
+    b: torch.Tensor,  # [..., K]
+    c: torch.Tensor,  # [...]
+    alpha: torch.Tensor,  # [..., K//K_block]
+    beta: torch.Tensor,  # [..., K//K_block]
     G: int,
     F: int,
     rho: str,
-) -> torch.Tensor:
+) -> torch.Tensor:  # [...]
     p = a.float() * b.float()
-    p = p.view(-1, G).sum(dim=1).flatten()
-    K_block = len(a) // len(alpha)
-    alpha = torch.repeat_interleave(alpha, K_block // G)
-    beta = torch.repeat_interleave(beta, K_block // G)
+    p = p.view(*p.shape[:-1], -1, G).sum(dim=-1)  # [..., K//G]
+    K_block = a.shape[-1] // alpha.shape[-1]
+    alpha = torch.repeat_interleave(alpha, K_block // G, dim=-1)  # [..., K//G]
+    beta = torch.repeat_interleave(beta, K_block // G, dim=-1)  # [..., K//G]
     s_alpha, e_alpha = frexp_and_normalize(alpha)
     s_beta, e_beta = frexp_and_normalize(beta)
     s_c, e_c = frexp_and_normalize(c)
-    s = torch.cat([p * s_alpha * s_beta, s_c.unsqueeze(0)])
-    e = torch.cat([e_alpha + e_beta, e_c.unsqueeze(0)])
+    s = torch.cat([p * s_alpha * s_beta, s_c.unsqueeze(-1)], dim=-1)
+    e = torch.cat([e_alpha + e_beta, e_c.unsqueeze(-1)], dim=-1)
     sum, e_max = truncated_fused_sum(s, e, F)
     return ldexp_and_normalize(sum, e_max, rho)
 
@@ -237,15 +236,16 @@ class MMA_GST_FDPA(MMABlockScaleOperation):
         if alpha.dtype == torch.float8_e4m3fn:
             alpha = truncate_e4m3_to_ue4m3(alpha)
             beta = truncate_e4m3_to_ue4m3(beta)
-        L = min(len(a), self.L_max)
-        K_block = len(a) // len(alpha)
-        for i in range(0, len(a), L):
+        K = a.shape[-1]
+        L = min(K, self.L_max)
+        K_block = K // alpha.shape[-1]
+        for i in range(0, K, L):
             c = gst_fdpa(
-                a[i : i + L],
-                b[i : i + L],
+                a[..., i : i + L],
+                b[..., i : i + L],
                 c,
-                alpha[i // K_block : (i + L) // K_block],
-                beta[i // K_block : (i + L) // K_block],
+                alpha[..., i // K_block : (i + L) // K_block],
+                beta[..., i // K_block : (i + L) // K_block],
                 self.G,
                 self.F,
                 self.rho,
@@ -261,18 +261,11 @@ class MMA_GST_FDPA(MMABlockScaleOperation):
         beta: torch.Tensor,
     ) -> torch.Tensor:
         m, n = C.shape
-        dtype = torch.float16 if self.rho.endswith("FP16") else torch.float32
-        D = torch.zeros((m, n), dtype=dtype)
-        for i in range(m):
-            for j in range(n):
-                D[i, j] = self.dpa(
-                    A[i, :],
-                    B[:, j],
-                    C[i, j],
-                    alpha[i, :],
-                    beta[:, j],
-                )
-        return D
+        a_vectors = A[:, None, :].expand(-1, n, -1)
+        b_vectors = B.T[None, :, :].expand(m, -1, -1)
+        alpha_vectors = alpha[:, None, :].expand(-1, n, -1)
+        beta_vectors = beta.T[None, :, :].expand(m, -1, -1)
+        return self.dpa(a_vectors, b_vectors, C, alpha_vectors, beta_vectors)
 
 
 def e_fdpa(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
