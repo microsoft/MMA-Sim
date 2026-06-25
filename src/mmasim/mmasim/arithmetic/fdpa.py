@@ -75,7 +75,7 @@ def truncated_fused_sum(
     s: torch.Tensor, e: IntTensor, F: int
 ) -> tuple[DoubleTensor, IntTensor]:
     # -126*2 <= e <= 127*2
-    e[s == 0.0] = -126  # TODO: handle zero
+    e[s == 0.0] = -126 * 2  # TODO: handle zero
     e_max = e.max(dim=-1).values
     delta_e = e.double() - e_max.unsqueeze(-1)
     s = torch.trunc(s * pow2(delta_e + F)) * 2.0**-F
@@ -335,9 +335,11 @@ def tr_fdpa(
     s_dot, e_dot = truncated_fused_sum(s, e, F)  # -126*2 <= e_dot <= 127*2
     s_c, e_c = frexp_and_normalize(c)  # -126 <= e_c <= 127
     e_max = torch.max(e_dot, e_c)
-    s_dot = torch.floor(s_dot * pow2(e_dot.double() - e_max + 52)) * 2.0**-52  # 52 > F2
+    s_dot = torch.floor(s_dot * pow2(e_dot.double() - e_max + 52)) * 2.0**-52  # F2 < 52
     s_c = torch.floor(s_c * pow2(e_c.double() - e_max + F)) * 2.0**-F
-    sum, e_max = frexp_and_normalize((s_dot + s_c) * pow2(e_max.double()))
+    sum, e_max = frexp_and_normalize(
+        (s_dot + s_c) * pow2(e_max.double()), e_subnormal=-126
+    )
     sum = torch.floor(sum * 2.0**F2) * 2.0**-F2
     return ldexp_and_normalize(sum, e_max, rho)
 
@@ -353,9 +355,12 @@ class MMA_TR_FDPA(MMAOperation):
         if a.dtype == torch.float32:  # tf32
             a = truncate_fp32_to_tf32(a)
             b = truncate_fp32_to_tf32(b)
-        L = min(len(a), self.L_max)
-        for i in range(0, len(a), L):
-            c = tr_fdpa(a[i : i + L], b[i : i + L], c, self.F, self.F2, self.rho)
+        K = a.shape[-1]
+        L = min(K, self.L_max)
+        for i in range(0, K, L):
+            c = tr_fdpa(
+                a[..., i : i + L], b[..., i : i + L], c, self.F, self.F2, self.rho
+            )
         return c
 
     def __call__(
@@ -365,12 +370,9 @@ class MMA_TR_FDPA(MMAOperation):
         C: torch.Tensor,
     ) -> torch.Tensor:
         m, n = C.shape
-        dtype = torch.float16 if self.rho.endswith("FP16") else torch.float32
-        D = torch.zeros((m, n), dtype=dtype)
-        for i in range(m):
-            for j in range(n):
-                D[i, j] = self.dpa(A[i, :], B[:, j], C[i, j])
-        return D
+        a_vectors = A[:, None, :].expand(-1, n, -1)
+        b_vectors = B.T[None, :, :].expand(m, -1, -1)
+        return self.dpa(a_vectors, b_vectors, C)
 
 
 def gtr_fdpa(
@@ -383,17 +385,21 @@ def gtr_fdpa(
 ) -> torch.Tensor:
     s_a, e_a = frexp_and_normalize(a)
     s_b, e_b = frexp_and_normalize(b)
-    s_even, e_even = truncated_fused_sum(s_a[::2] * s_b[::2], e_a[::2] + e_b[::2], F)
-    s_odd, e_odd = truncated_fused_sum(s_a[1::2] * s_b[1::2], e_a[1::2] + e_b[1::2], F)
+    s_even, e_even = truncated_fused_sum(
+        s_a[..., ::2] * s_b[..., ::2], e_a[..., ::2] + e_b[..., ::2], F
+    )
+    s_odd, e_odd = truncated_fused_sum(
+        s_a[..., 1::2] * s_b[..., 1::2], e_a[..., 1::2] + e_b[..., 1::2], F
+    )
     e_dot = torch.max(e_even, e_odd)  # -15*2 <= e_even, e_odd <= 15*2
     s_dot = torch.floor(s_even * pow2(e_even - e_dot + F)) * 2.0**-F
     s_dot += torch.floor(s_odd * pow2(e_odd - e_dot + F)) * 2.0**-F
     s_c, e_c = frexp_and_normalize(c)  # -126 <= e_c <= 127
     e_max = torch.max(e_dot, e_c)
-    s_dot = torch.floor(s_dot * pow2(e_dot.double() - e_max + 52)) * 2.0**-52  # 52 > F2
+    s_dot = torch.floor(s_dot * pow2(e_dot.double() - e_max + 52)) * 2.0**-52  # F2 < 52
     s_c = torch.floor(s_c * pow2(e_c.double() - e_max + F)) * 2.0**-F
     s_c[e_c < e_max - F - 1] = 0.0
-    s_dot, e_max = frexp_and_normalize((s_dot + s_c) * pow2(e_max))
+    s_dot, e_max = frexp_and_normalize((s_dot + s_c) * pow2(e_max), e_subnormal=-126)
     s_dot = torch.floor(s_dot * 2.0**F2) * 2.0**-F2
     return ldexp_and_normalize(s_dot, e_max, rho)
 
@@ -406,9 +412,12 @@ class MMA_GTR_FDPA(MMAOperation):
         self.L_max = L_max
 
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-        L = min(len(a), self.L_max)
-        for i in range(0, len(a), L):
-            c = gtr_fdpa(a[i : i + L], b[i : i + L], c, self.F, self.F2, self.rho)
+        K = a.shape[-1]
+        L = min(K, self.L_max)
+        for i in range(0, K, L):
+            c = gtr_fdpa(
+                a[..., i : i + L], b[..., i : i + L], c, self.F, self.F2, self.rho
+            )
         return c
 
     def __call__(
@@ -418,9 +427,6 @@ class MMA_GTR_FDPA(MMAOperation):
         C: torch.Tensor,
     ) -> torch.Tensor:
         m, n = C.shape
-        dtype = torch.float16 if self.rho.endswith("FP16") else torch.float32
-        D = torch.zeros((m, n), dtype=dtype)
-        for i in range(m):
-            for j in range(n):
-                D[i, j] = self.dpa(A[i, :], B[:, j], C[i, j])
-        return D
+        a_vectors = A[:, None, :].expand(-1, n, -1)
+        b_vectors = B.T[None, :, :].expand(m, -1, -1)
+        return self.dpa(a_vectors, b_vectors, C)
