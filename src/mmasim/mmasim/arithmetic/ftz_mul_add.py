@@ -6,11 +6,8 @@ from .helper import dtype_subnormal_exponent
 
 def flush_subnormal(x: torch.Tensor, keep_sign: bool = False) -> torch.Tensor:
     min_exponent = dtype_subnormal_exponent[x.dtype]
-    if keep_sign:
-        x[x.abs() < 2.0**min_exponent] *= 0.0
-    else:
-        x[x.abs() < 2.0**min_exponent] = 0.0
-    return x
+    zeros = x * 0.0 if keep_sign else torch.zeros_like(x)
+    return torch.where(x.abs() < 2.0**min_exponent, zeros, x)
 
 
 def ftz_mul(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
@@ -37,9 +34,9 @@ class MMA_FTZ_MUL_ADD(MMAOperation):
         product = ftz_mul(a, b)
         c = flush_subnormal(c, keep_sign=False)
         for i in range(0, len(a), self.P):
-            s = ftz_add(product[i], product[i + 1])
+            s = ftz_add(product[..., i], product[..., i + 1])
             if self.P == 4:
-                s2 = ftz_add(product[i + 2], product[i + 3])
+                s2 = ftz_add(product[..., i + 2], product[..., i + 3])
                 s = ftz_add(s, s2)
             c = ftz_add(c, s)
         return c
@@ -51,8 +48,7 @@ class MMA_FTZ_MUL_ADD(MMAOperation):
         C: torch.Tensor,
     ) -> torch.Tensor:
         m, n = C.shape
-        D = torch.zeros((m, n), dtype=C.dtype)
-        for i in range(m):
-            for j in range(n):
-                D[i][j] = self.dpa(A[i, :], B[:, j], C[i, j])
+        a_vectors = A[:, None, :].expand(-1, n, -1)
+        b_vectors = B.T[None, :, :].expand(m, -1, -1)
+        D = self.dpa(a_vectors, b_vectors, C)
         return D

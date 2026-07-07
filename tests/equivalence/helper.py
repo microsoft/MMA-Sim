@@ -61,7 +61,7 @@ def random_test(
             assert isinstance(sim, MMAOperation)
             assert isinstance(kernel, MMAOperation)
             D_gpu = kernel(A, B, C).cpu()
-            D_sim = sim(A.cpu(), B.cpu(), C.cpu())
+            D_sim = sim(A, B, C).cpu()
         else:
             assert isinstance(sim, MMABlockScaleOperation)
             assert isinstance(kernel, MMABlockScaleKernel)
@@ -90,7 +90,7 @@ def random_test(
             )
             scale_B = scale_B_T.T
             D_gpu = kernel(A, B, C, scale_A, scale_B).cpu()
-            D_sim = sim(A.cpu(), B.cpu(), C.cpu(), scale_A.cpu(), scale_B.cpu())
+            D_sim = sim(A, B, C, scale_A, scale_B).cpu()
         D_sim_raw = D_sim.view(storage_type[d_type.itemsize])
         D_gpu_raw = D_gpu.view(storage_type[d_type.itemsize])
         is_different = D_sim_raw != D_gpu_raw
