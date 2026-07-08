@@ -1,7 +1,14 @@
 # AMD ROCm Configuration
 HIPCC      := /opt/rocm/bin/hipcc
 HIPFLAGS   := -shared -fPIC
-AMDTARGETS := cdna1.so cdna2.so cdna3.so
+AMDTARGETS := cdna1 cdna2 cdna3
+AMDSOFILES := $(AMDTARGETS:=.so)
+
+.PHONY: all clean $(AMDTARGETS)
+all: $(AMDSOFILES)
+$(AMDTARGETS): %: %.so
+clean:
+	rm -f $(AMDSOFILES)
 
 # AMD GPU targets
 cdna1.so: mfma_cdna1.hip
@@ -12,12 +19,3 @@ cdna2.so: mfma_cdna2.hip mfma_cdna1.hip
 
 cdna3.so: mfma_cdna3.hip
 	$(HIPCC) $(HIPFLAGS) --offload-arch=gfx942 -o $@ $^
-
-# Build all targets
-all: $(AMDTARGETS)
-
-# Clean up build artifacts
-clean:
-	rm -f $(AMDTARGETS)
-
-.PHONY: all clean

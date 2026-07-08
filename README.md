@@ -1,90 +1,87 @@
-# MMA-Sim: A Bit-Accurate Behavior Simulator for Matrix Multiplication Accelerators
+# MMA-Sim: Bit-Accurate Modeling of GPU Matrix Multiply-Accumulate Units
 
-MMA-Sim can simulate the matrix multiply-accumulate operation `D=A*B+C` and produce the outputs **bit-wise identical** with the outputs of [Tensor Cores](https://www.nvidia.com/en-us/data-center/tensor-cores/) and [Matrix Cores](https://rocm.docs.amd.com/en/latest/conceptual/gpu-arch/mi300.html).
+MMA-Sim models the non-standard arithmetic behaviors of GPU matrix multiply-accumulate units such as [Tensor Cores](https://www.nvidia.com/en-us/data-center/tensor-cores/) and [Matrix Cores](https://www.amd.com/en/technologies/cdna.html). For an architecture-specific matrix multiply-accumulate (MMA) instruction, MMA-Sim simulates the MMA operation `D=A*B+C` and produces outputs **bit-wise identical** to the outputs of the GPU MMA instruction.
 
 ```mermaid
-flowchart  LR;
-    A[/Input A, B, C/]
-    B[Some Matrix 
-    Multiplication
-    Accelerator]
-    C[MMA-Sim]
-    D[/Identical Output D/]
-    A-->B;
-    A-->C;
-    B-->D;
-    C-->D;
+flowchart LR;
+    In[/Input A, B, C/]
+    GPU[GPU MMA Instr.]
+    Sim[MMA-Sim]
+    Out[/Identical Output D/]
+    In-->GPU;
+    In-->Sim;
+    GPU-->Out;
+    Sim-->Out;
 ```
 
-MMA-Sim precisely models the numerical behaviors of all generations of Tensor Cores and Matrix Cores, and reveals their design differences in multiply-add implementations, accumulation orders, rounding modes and internal precisions. 
-
-Citation of the technical report:
-```
-Coming soon
-```
+[Our paper](https://arxiv.org/abs/2511.10909) details the arithmetic behavior models, explains the numerical discrepancies among GPU architectures, and analyzes their numerical accuracy. 
 
 ## How to use MMA-Sim
-
-Platform requirements:
-
-1. OS: Linux
-2. Software: Python (>=3.10), PyTorch (>=2.6)
 
 Installation:
 
 ```shell
-git clone https://github.com/microsoft/MMA-Sim.git --depth=1
-cd MMA-Sim
-pip install -e .
+pip install mmasim
 ```
 
-Example on Ampere architecture:
+Example:
 
 ```python
 import torch
-from mmasim.simulator.nv import MMA
-A = torch.randn([16,16], dtype=torch.float16)
-B = torch.randn([16,8], dtype=torch.float16)
-C = torch.zeros([16,8], dtype=torch.float16)
-MMA_Sim = MMA(arch="Ampere", qualifier="m16n8k16.f16.f16.f16.f16")
-D_sim = MMA_Sim(A, B, C)
-print(D_sim)
+from mmasim.nv_ptx.sim import MMA  # for "mma.sync" instructions
+from mmasim.amd.sim import MFMA  # for "v_mfma" instructions
+
+A = torch.randn([16, 16], dtype=torch.float16)
+B = torch.randn([16, 16], dtype=torch.float16)
+C = torch.zeros([16, 16], dtype=torch.float32)
+# mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 (PTX)
+# corresponding to HMMA.16816.F32 (SASS)
+mma_a100 = MMA("Ampere", "m16n8k16.f32.f16.f16.f32")
+# v_mfma_f32_16x16x16_f16
+mfma_mi300 = MFMA("CDNA3", "f32_16x16x16_f16")
+D_a100 = torch.cat([mma_a100(A, B[:, :8], C[:, :8]), mma_a100(A, B[:, 8:], C[:, 8:])], dim=1)
+D_mi300 = mfma_mi300(A, B, C)
+print(D_a100 - D_mi300)  # non-zero values indicate numerical discrepancies
 ```
 
-## How to verify the correctness
+Supported GPU architectures: `Volta`, `Turing`, `Ampere`, `Ada Lovelace`, `Hopper`, `Blackwell`, `RTX Blackwell`, `CDNA1`, `CDNA2`, and `CDNA3`.
+Supported MMA instructions: `mma.sync`, `wgmma.mma_async`, `tcgen05.mma`, and `v_mfma`.
+Supported data types: FP64, FP32, TF32, FP16, BF16, FP8, FP4, MXFP8, MXFP4, and NVFP4.
 
-Additional requirements:
+## How to verify the equivalence between MMA-Sim and GPU
 
-1. Hardware: A GPU with Tensor Core or Matrix Core
-2. Software: CUDA (>=12.8) or ROCm (>=6.3)
-
-Additional builds:
+You should have a GPU and the additional installation for differential testing:
 
 ```shell
-cd mmasim/intrinsic/impl
-make your_gpu_architecture.so
-cd -
+pip install mmasim-kernels
 ```
 
-Supported GPU architectures:
-
-```
-nv_volta nv_turing nv_ampere nv_adalovelace nv_hopper nv_blackwell nv_rtxblackwell
-amd_cdna1 amd_cdna2 amd_cdna3
-```
-
-Example followup (assuming your GPU architecture is Ampere):
+Example:
 
 ```python
-from mmasim.kernels.nv_ampere import mma_kernels
-intrinsic = mma_kernels["m16n8k16.f16.f16.f16.f16"]
-D_real = intrinsic(A, B, C)
-print(D_real)
-is_bitwise_equal = D_sim.view(torch.uint16) == D_real.cpu().view(torch.uint16)
-print(is_bitwise_equal)
+import torch
+from mmasim.nv_ptx.sim import MMA
+from mmasim_kernels.nv_ptx.rtx_blackwell import mma_kernels
+
+mma_sim = MMA("RTX Blackwell", "m16n8k16.f32.f16.f16.f32")
+mma_gpu = mma_kernels["m16n8k16.f32.f16.f16.f32"]
+
+for _ in range(1000):
+    A = torch.randn([16, 16], dtype=torch.float16, device="cuda")
+    B = torch.randn([16, 8], dtype=torch.float16, device="cuda")
+    C = torch.zeros([16, 8], dtype=torch.float32, device="cuda")
+    D_sim = mma_sim(A, B, C)  # MMA-Sim also supports GPU tensors
+    D_gpu = mma_gpu(A, B, C)
+    assert torch.equal(D_sim, D_gpu)  # bit-wise identical
 ```
 
-Additionally, you can run `python tests/test_your_gpu_architecture.py` to verify the correctness for all matrix multiplication instructions on your GPU.
+Additionally, you can run test scripts in [tests/equivalence](tests/equivalence) to verify the equivalence for MMA instructions on your GPU.
+
+## Citation
+
+```
+Coming soon
+```
 
 ## Contributing
 

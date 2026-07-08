@@ -1,7 +1,14 @@
 # NVIDIA CUDA Configuration
 NVCC       := /usr/local/cuda/bin/nvcc
 NVCCFLAGS  := -shared -Xcompiler -fPIC
-NVTARGETS  := volta.so turing.so ampere.so ada_lovelace.so hopper.so blackwell.so rtx_blackwell.so
+NVTARGETS  := volta turing ampere ada_lovelace hopper blackwell rtx_blackwell
+NVSOFILES  := $(NVTARGETS:=.so)
+
+.PHONY: all clean $(NVTARGETS)
+all: $(NVSOFILES)
+$(NVTARGETS): %: %.so
+clean:
+	rm -f $(NVSOFILES)
 
 # NVIDIA GPU targets
 volta.so: mma_sm70.cu
@@ -24,12 +31,3 @@ blackwell.so: tcgen05mma_sm100a.cu mma_sm80.cu mma_sm75.cu
 
 rtx_blackwell.so: mma_sm120a.cu mma_sm89.cu mma_sm80.cu mma_sm75.cu
 	$(NVCC) $(NVCCFLAGS) -arch=compute_120a -code=sm_120a -o $@ $^
-
-# Build all targets
-all: $(NVTARGETS)
-
-# Clean up build artifacts
-clean:
-	rm -f $(NVTARGETS)
-
-.PHONY: all clean
