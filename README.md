@@ -5,7 +5,7 @@ MMA-Sim models the non-standard arithmetic behaviors of GPU matrix multiply-accu
 ```mermaid
 flowchart LR;
     In[/Input A, B, C/]
-    GPU[GPU MMA Instr.]
+    GPU[GPU MMA Instruction]
     Sim[MMA-Sim]
     Out[/Identical Output D/]
     In-->GPU;
@@ -31,21 +31,25 @@ import torch
 from mmasim.nv_ptx.sim import MMA  # for "mma.sync" instructions
 from mmasim.amd.sim import MFMA  # for "v_mfma" instructions
 
+# mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 (PTX)
+# or HMMA.16816.F32 (SASS)
+mma_a100 = MMA("Ampere", "m16n8k16.f32.f16.f16.f32")
+
+# v_mfma_f32_16x16x16_f16
+mfma_mi300 = MFMA("CDNA3", "f32_16x16x16_f16")
+
 A = torch.randn([16, 16], dtype=torch.float16)
 B = torch.randn([16, 16], dtype=torch.float16)
 C = torch.zeros([16, 16], dtype=torch.float32)
-# mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 (PTX)
-# corresponding to HMMA.16816.F32 (SASS)
-mma_a100 = MMA("Ampere", "m16n8k16.f32.f16.f16.f32")
-# v_mfma_f32_16x16x16_f16
-mfma_mi300 = MFMA("CDNA3", "f32_16x16x16_f16")
 D_a100 = torch.cat([mma_a100(A, B[:, :8], C[:, :8]), mma_a100(A, B[:, 8:], C[:, 8:])], dim=1)
 D_mi300 = mfma_mi300(A, B, C)
 print(D_a100 - D_mi300)  # non-zero values indicate numerical discrepancies
 ```
 
 Supported GPU architectures: `Volta`, `Turing`, `Ampere`, `Ada Lovelace`, `Hopper`, `Blackwell`, `RTX Blackwell`, `CDNA1`, `CDNA2`, and `CDNA3`.
+
 Supported MMA instructions: `mma.sync`, `wgmma.mma_async`, `tcgen05.mma`, and `v_mfma`.
+
 Supported data types: FP64, FP32, TF32, FP16, BF16, FP8, FP4, MXFP8, MXFP4, and NVFP4.
 
 ## How to verify the equivalence between MMA-Sim and GPU

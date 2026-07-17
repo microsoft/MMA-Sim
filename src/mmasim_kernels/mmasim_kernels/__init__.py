@@ -42,7 +42,13 @@ class MMAKernel(mmasim.MMAOperation):
         B = B.cuda()
         C = C.cuda()
         D = torch.empty((self.m, self.n), dtype=self.d_type, device="cuda")
-        self.kernel(D.data_ptr(), A.data_ptr(), B.data_ptr(), C.data_ptr())
+        arg_count = len(self.kernel.argtypes)
+        if arg_count == 4:
+            self.kernel(D.data_ptr(), A.data_ptr(), B.data_ptr(), C.data_ptr())
+        else:
+            assert arg_count == 3
+            D.copy_(C)
+            self.kernel(D.data_ptr(), A.data_ptr(), B.data_ptr())
         return D
 
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
@@ -115,14 +121,26 @@ class MMABlockScaleKernel(mmasim.MMABlockScaleOperation):
             scale_B = scale_B.T.contiguous().T  # Make scale_B column-major
         scale_A = scale_A.cuda()
         scale_B = scale_B.cuda()
-        self.kernel(
-            D.data_ptr(),
-            A.data_ptr(),
-            B.data_ptr(),
-            C.data_ptr(),
-            scale_A.data_ptr(),
-            scale_B.data_ptr(),
-        )
+        arg_count = len(self.kernel.argtypes)
+        if arg_count == 6:
+            self.kernel(
+                D.data_ptr(),
+                A.data_ptr(),
+                B.data_ptr(),
+                C.data_ptr(),
+                scale_A.data_ptr(),
+                scale_B.data_ptr(),
+            )
+        else:
+            assert arg_count == 5
+            D.copy_(C)
+            self.kernel(
+                D.data_ptr(),
+                A.data_ptr(),
+                B.data_ptr(),
+                scale_A.data_ptr(),
+                scale_B.data_ptr(),
+            )
         return D
 
     def dpa(
