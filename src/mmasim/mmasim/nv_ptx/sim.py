@@ -28,16 +28,16 @@ class MMA(isa_mma.MMA):
                 }
                 F = F_table[arch]
                 rho = "RNE-FP16" if self.d_type == torch.float16 else "RZ-FP32"
-            L_max_table = {
+            L_max_bytes = {
                 "Volta": 4 * 2,
                 "Turing": 8 * 2,
                 "Ampere": 8 * 2,
-                "Ada Lovelace": 16,
-                "Hopper": 32,
-                "Blackwell": 32,
-                "RTX Blackwell": 32,
+                "Ada Lovelace": 8 * 2,
+                "Hopper": 16 * 2,
+                "Blackwell": 16 * 2,
+                "RTX Blackwell": 16 * 2,
             }
-            L_max = L_max_table[arch] // self.a_type.itemsize
+            L_max = L_max_bytes[arch] // self.a_type.itemsize
             self.arithmetic_op = fdpa.MMA_T_FDPA(F, rho, L_max)
 
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
@@ -84,7 +84,6 @@ class MMABlockScale(isa_mma.MMABlockScale):
 class WGMMA(isa_wgmma.WGMMA):
     def __init__(self, arch: str, shape_and_type: str):
         super().__init__(arch, shape_and_type)
-        assert self.arch == "Hopper"
         if self.a_type in [
             torch.float8_e5m2,
             torch.float8_e4m3fn,
