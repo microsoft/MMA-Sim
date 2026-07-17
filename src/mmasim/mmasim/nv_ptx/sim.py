@@ -84,7 +84,8 @@ class MMABlockScale(isa_mma.MMABlockScale):
 class WGMMA(isa_wgmma.WGMMA):
     def __init__(self, arch: str, shape_and_type: str):
         super().__init__(arch, shape_and_type)
-        if self.arch == "Ada Lovelace" and self.a_type in [
+        assert self.arch == "Hopper"
+        if self.a_type in [
             torch.float8_e5m2,
             torch.float8_e4m3fn,
         ]:
