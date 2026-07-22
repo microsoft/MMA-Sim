@@ -2,7 +2,7 @@
 
 extern "C" // tf32
 {
-    __global__ void tcgen05mma_tf32_m64n8k8_f32_tf32_tf32_kernel(
+    __global__ void tcgen05mma_m64n8k8_f32_tf32_tf32_kernel(
         uint32_t *d, uint32_t *a, uint32_t *b)
     {
         const uint32_t M = 64, N = 8, K = 8;
@@ -27,16 +27,16 @@ extern "C" // tf32
         RELINQUISH_TMEM();
     }
 
-    void tcgen05mma_tf32_m64n8k8_f32_tf32_tf32(
+    void tcgen05mma_m64n8k8_f32_tf32_tf32(
         uint32_t *d, uint32_t *a, uint32_t *b)
     {
-        tcgen05mma_tf32_m64n8k8_f32_tf32_tf32_kernel<<<1, 128>>>(d, a, b);
+        tcgen05mma_m64n8k8_f32_tf32_tf32_kernel<<<1, 128>>>(d, a, b);
     }
 }
 
 extern "C" // f16 and bf16
 {
-    __global__ void tcgen05mma_f16_m64n8k16_f32_f16_f16_kernel(
+    __global__ void tcgen05mma_m64n8k16_f32_f16_f16_kernel(
         uint32_t *d, uint16_t *a, uint16_t *b)
     {
         const uint32_t M = 64, N = 8, K = 16;
@@ -61,7 +61,7 @@ extern "C" // f16 and bf16
         RELINQUISH_TMEM();
     }
 
-    __global__ void tcgen05mma_f16_m64n8k16_f32_bf16_bf16_kernel(
+    __global__ void tcgen05mma_m64n8k16_f32_bf16_bf16_kernel(
         uint32_t *d, uint16_t *a, uint16_t *b)
     {
         const uint32_t M = 64, N = 8, K = 16;
@@ -86,7 +86,7 @@ extern "C" // f16 and bf16
         RELINQUISH_TMEM();
     }
 
-    __global__ void tcgen05mma_f16_m64n8k16_f16_f16_f16_kernel(
+    __global__ void tcgen05mma_m64n8k16_f16_f16_f16_kernel(
         uint16_t *d, uint16_t *a, uint16_t *b)
     {
         const uint32_t M = 64, N = 8, K = 16;
@@ -111,28 +111,28 @@ extern "C" // f16 and bf16
         RELINQUISH_TMEM();
     }
 
-    void tcgen05mma_f16_m64n8k16_f32_f16_f16(
+    void tcgen05mma_m64n8k16_f32_f16_f16(
         uint32_t *d, uint16_t *a, uint16_t *b)
     {
-        tcgen05mma_f16_m64n8k16_f32_f16_f16_kernel<<<1, 128>>>(d, a, b);
+        tcgen05mma_m64n8k16_f32_f16_f16_kernel<<<1, 128>>>(d, a, b);
     }
 
-    void tcgen05mma_f16_m64n8k16_f32_bf16_bf16(
+    void tcgen05mma_m64n8k16_f32_bf16_bf16(
         uint32_t *d, uint16_t *a, uint16_t *b)
     {
-        tcgen05mma_f16_m64n8k16_f32_bf16_bf16_kernel<<<1, 128>>>(d, a, b);
+        tcgen05mma_m64n8k16_f32_bf16_bf16_kernel<<<1, 128>>>(d, a, b);
     }
 
-    void tcgen05mma_f16_m64n8k16_f16_f16_f16(
+    void tcgen05mma_m64n8k16_f16_f16_f16(
         uint16_t *d, uint16_t *a, uint16_t *b)
     {
-        tcgen05mma_f16_m64n8k16_f16_f16_f16_kernel<<<1, 128>>>(d, a, b);
+        tcgen05mma_m64n8k16_f16_f16_f16_kernel<<<1, 128>>>(d, a, b);
     }
 }
 
 extern "C" // fp8 m64n8k32 f32_output
 {
-    __global__ void tcgen05mma_f8f6f4_m64n8k32_f32_e5m2_e5m2_kernel(
+    __global__ void tcgen05mma_m64n8k32_f32_e5m2_e5m2_kernel(
         uint32_t *d, uint8_t *a, uint8_t *b)
     {
         const uint32_t M = 64, N = 8, K = 32;
@@ -157,7 +157,7 @@ extern "C" // fp8 m64n8k32 f32_output
         RELINQUISH_TMEM();
     }
 
-    __global__ void tcgen05mma_f8f6f4_m64n8k32_f32_e4m3_e4m3_kernel(
+    __global__ void tcgen05mma_m64n8k32_f32_e4m3_e4m3_kernel(
         uint32_t *d, uint8_t *a, uint8_t *b)
     {
         const uint32_t M = 64, N = 8, K = 32;
@@ -182,22 +182,22 @@ extern "C" // fp8 m64n8k32 f32_output
         RELINQUISH_TMEM();
     }
 
-    void tcgen05mma_f8f6f4_m64n8k32_f32_e5m2_e5m2(
+    void tcgen05mma_m64n8k32_f32_e5m2_e5m2(
         uint32_t *d, uint8_t *a, uint8_t *b)
     {
-        tcgen05mma_f8f6f4_m64n8k32_f32_e5m2_e5m2_kernel<<<1, 128>>>(d, a, b);
+        tcgen05mma_m64n8k32_f32_e5m2_e5m2_kernel<<<1, 128>>>(d, a, b);
     }
 
-    void tcgen05mma_f8f6f4_m64n8k32_f32_e4m3_e4m3(
+    void tcgen05mma_m64n8k32_f32_e4m3_e4m3(
         uint32_t *d, uint8_t *a, uint8_t *b)
     {
-        tcgen05mma_f8f6f4_m64n8k32_f32_e4m3_e4m3_kernel<<<1, 128>>>(d, a, b);
+        tcgen05mma_m64n8k32_f32_e4m3_e4m3_kernel<<<1, 128>>>(d, a, b);
     }
 }
 
 extern "C" // fp8 m64n8k32 f16_output
 {
-    __global__ void tcgen05mma_f8f6f4_m64n8k32_f16_e5m2_e5m2_kernel(
+    __global__ void tcgen05mma_m64n8k32_f16_e5m2_e5m2_kernel(
         uint16_t *d, uint8_t *a, uint8_t *b)
     {
         const uint32_t M = 64, N = 8, K = 32;
@@ -222,7 +222,7 @@ extern "C" // fp8 m64n8k32 f16_output
         RELINQUISH_TMEM();
     }
 
-    __global__ void tcgen05mma_f8f6f4_m64n8k32_f16_e4m3_e4m3_kernel(
+    __global__ void tcgen05mma_m64n8k32_f16_e4m3_e4m3_kernel(
         uint16_t *d, uint8_t *a, uint8_t *b)
     {
         const uint32_t M = 64, N = 8, K = 32;
@@ -247,22 +247,22 @@ extern "C" // fp8 m64n8k32 f16_output
         RELINQUISH_TMEM();
     }
 
-    void tcgen05mma_f8f6f4_m64n8k32_f16_e5m2_e5m2(
+    void tcgen05mma_m64n8k32_f16_e5m2_e5m2(
         uint16_t *d, uint8_t *a, uint8_t *b)
     {
-        tcgen05mma_f8f6f4_m64n8k32_f16_e5m2_e5m2_kernel<<<1, 128>>>(d, a, b);
+        tcgen05mma_m64n8k32_f16_e5m2_e5m2_kernel<<<1, 128>>>(d, a, b);
     }
 
-    void tcgen05mma_f8f6f4_m64n8k32_f16_e4m3_e4m3(
+    void tcgen05mma_m64n8k32_f16_e4m3_e4m3(
         uint16_t *d, uint8_t *a, uint8_t *b)
     {
-        tcgen05mma_f8f6f4_m64n8k32_f16_e4m3_e4m3_kernel<<<1, 128>>>(d, a, b);
+        tcgen05mma_m64n8k32_f16_e4m3_e4m3_kernel<<<1, 128>>>(d, a, b);
     }
 }
 
 extern "C" // mxfp8
 {
-    __global__ void tcgen05mma_mxf8f6f4_m128n8k32_block32_f32_e5m2_e5m2_ue8m0_kernel(
+    __global__ void tcgen05mma_m128n8k32_block32_f32_e5m2_e5m2_ue8m0_kernel(
         uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
     {
         const uint32_t M = 128, N = 8, K = 32;
@@ -293,7 +293,7 @@ extern "C" // mxfp8
         RELINQUISH_TMEM();
     }
 
-    __global__ void tcgen05mma_mxf8f6f4_m128n8k32_block32_f32_e4m3_e4m3_ue8m0_kernel(
+    __global__ void tcgen05mma_m128n8k32_block32_f32_e4m3_e4m3_ue8m0_kernel(
         uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
     {
         const uint32_t M = 128, N = 8, K = 32;
@@ -324,22 +324,22 @@ extern "C" // mxfp8
         RELINQUISH_TMEM();
     }
 
-    void tcgen05mma_mxf8f6f4_m128n8k32_block32_f32_e5m2_e5m2_ue8m0(
+    void tcgen05mma_m128n8k32_block32_f32_e5m2_e5m2_ue8m0(
         uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
     {
-        tcgen05mma_mxf8f6f4_m128n8k32_block32_f32_e5m2_e5m2_ue8m0_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
+        tcgen05mma_m128n8k32_block32_f32_e5m2_e5m2_ue8m0_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
     }
 
-    void tcgen05mma_mxf8f6f4_m128n8k32_block32_f32_e4m3_e4m3_ue8m0(
+    void tcgen05mma_m128n8k32_block32_f32_e4m3_e4m3_ue8m0(
         uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
     {
-        tcgen05mma_mxf8f6f4_m128n8k32_block32_f32_e4m3_e4m3_ue8m0_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
+        tcgen05mma_m128n8k32_block32_f32_e4m3_e4m3_ue8m0_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
     }
 }
 
-extern "C" // mxfp4
+extern "C" // mxfp4 nvfp4
 {
-    __global__ void tcgen05mma_mxf4_m128n8k64_block32_f32_e2m1_e2m1_ue8m0_kernel(
+    __global__ void tcgen05mma_m128n8k64_block32_f32_e2m1_e2m1_ue8m0_kernel(
         uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
     {
         const uint32_t M = 128, N = 8, K = 64;
@@ -362,37 +362,7 @@ extern "C" // mxfp4
         LOAD_SFB_N8SFK2();
         __syncthreads();
         i_desc |= (1 << 7) | (1 << 10) | (1 << 23); // e2m1, ue8m0_scale
-        MMA_WITH_BLOCK_SCALE("mxf4", "scale_vec::2X");
-        STORE_D_M128N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        DEALLOC_TMEM(sfa_tmem_addr);
-        DEALLOC_TMEM(sfb_tmem_addr);
-        RELINQUISH_TMEM();
-    }
-
-    __global__ void tcgen05mma_mxf4nvf4_m128n8k64_block32_f32_e2m1_e2m1_ue8m0_kernel(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        const uint32_t M = 128, N = 8, K = 64;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 7 << 27), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K / 2], b_smem[N * K / 2];
-        __shared__ uint32_t d_tmem_addr, sfa_tmem_addr, sfb_tmem_addr;
-        __shared__ uint64_t mma_barrier;
-
-        INIT_MBARRIER();
-        LOAD_A_M128K64_FP4();
-        LOAD_B_N8K64_FP4();
-        ALLOC_TMEM(d_tmem_addr);
-        ALLOC_TMEM(sfa_tmem_addr);
-        ALLOC_TMEM(sfb_tmem_addr);
-        __syncthreads();
-        LOAD_D_M128N8();
-        LOAD_SFA_M128SFK2();
-        LOAD_SFB_N8SFK2();
-        __syncthreads();
-        i_desc |= (1 << 7) | (1 << 10) | (1 << 23); // e2m1, ue8m0_scale
+        // .kind::mxf4 seems to behave the same as .kind::mxf4nvf4 for mxfp4
         MMA_WITH_BLOCK_SCALE("mxf4nvf4", "scale_vec::2X");
         STORE_D_M128N8();
         DEALLOC_TMEM(d_tmem_addr);
@@ -401,7 +371,7 @@ extern "C" // mxfp4
         RELINQUISH_TMEM();
     }
 
-    __global__ void tcgen05mma_mxf4nvf4_m128n8k64_block16_f32_e2m1_e2m1_ue8m0_kernel(
+    __global__ void tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue8m0_kernel(
         uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
     {
         const uint32_t M = 128, N = 8, K = 64;
@@ -432,7 +402,7 @@ extern "C" // mxfp4
         RELINQUISH_TMEM();
     }
 
-    __global__ void tcgen05mma_mxf4nvf4_m128n8k64_block16_f32_e2m1_e2m1_ue4m3_kernel(
+    __global__ void tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue4m3_kernel(
         uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
     {
         const uint32_t M = 128, N = 8, K = 64;
@@ -463,27 +433,21 @@ extern "C" // mxfp4
         RELINQUISH_TMEM();
     }
 
-    void tcgen05mma_mxf4_m128n8k64_block32_f32_e2m1_e2m1_ue8m0(
+    void tcgen05mma_m128n8k64_block32_f32_e2m1_e2m1_ue8m0(
         uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
     {
-        tcgen05mma_mxf4_m128n8k64_block32_f32_e2m1_e2m1_ue8m0_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
+        tcgen05mma_m128n8k64_block32_f32_e2m1_e2m1_ue8m0_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
     }
 
-    void tcgen05mma_mxf4nvf4_m128n8k64_block32_f32_e2m1_e2m1_ue8m0(
+    void tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue8m0(
         uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
     {
-        tcgen05mma_mxf4nvf4_m128n8k64_block32_f32_e2m1_e2m1_ue8m0_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
+        tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue8m0_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
     }
 
-    void tcgen05mma_mxf4nvf4_m128n8k64_block16_f32_e2m1_e2m1_ue8m0(
+    void tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue4m3(
         uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
     {
-        tcgen05mma_mxf4nvf4_m128n8k64_block16_f32_e2m1_e2m1_ue8m0_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
-    }
-
-    void tcgen05mma_mxf4nvf4_m128n8k64_block16_f32_e2m1_e2m1_ue4m3(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        tcgen05mma_mxf4nvf4_m128n8k64_block16_f32_e2m1_e2m1_ue4m3_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
+        tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue4m3_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
     }
 }
