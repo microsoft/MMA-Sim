@@ -1,4 +1,9 @@
-from typing import Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ctypes import _NamedFuncPointer
+else:
+    _NamedFuncPointer = object
 
 import torch
 import mmasim
@@ -12,7 +17,7 @@ class MMAKernel(mmasim.MMAOperation):
     b_type: torch.dtype
     c_type: torch.dtype
     d_type: torch.dtype
-    kernel: Callable
+    kernel: _NamedFuncPointer
 
     def check_input(
         self,
@@ -73,7 +78,7 @@ class MMABlockScaleKernel(mmasim.MMABlockScaleOperation):
     c_type: torch.dtype
     d_type: torch.dtype
     s_type: torch.dtype
-    kernel: Callable
+    kernel: _NamedFuncPointer
 
     def check_input(
         self,

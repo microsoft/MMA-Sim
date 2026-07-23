@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mmasim-kernels"
-version = "2.0.0"
+version = "2.0.1"
 authors = [{ name="Peichen Xie", email="peichenxie@microsoft.com" }]
 requires-python = ">=3.10"
-dependencies = ["torch>=2.6", "mmasim>=2.0.0"]
+dependencies = ["torch>=2.7", "mmasim>=2.0.1"]
 
 [tool.setuptools.packages.find]
 where = ["."]
