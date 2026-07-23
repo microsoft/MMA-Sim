@@ -104,7 +104,7 @@ class WGMMA(isa_wgmma.WGMMA):
             F = 25
             rho = "RNE-FP16" if self.d_type == torch.float16 else "RZ-FP32"
         L_max = 32 // self.a_type.itemsize
-        self.arithmetic_op = fdpa.MMA_T_FDPA(F, rho, L_max)
+        self.arithmetic_op = fdpa.MMA_T_FDPA(F, rho, L_max, e_zero=-133)
 
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
         return self.arithmetic_op.dpa(a, b, c)
@@ -124,7 +124,7 @@ class TCGen05MMA(isa_tcgen05mma.TCGen05MMA):
         F = 25
         rho = "RNE-FP16" if self.d_type == torch.float16 else "RZ-FP32"
         L_max = 32 // self.a_type.itemsize
-        self.arithmetic_op = fdpa.MMA_T_FDPA(F, rho, L_max)
+        self.arithmetic_op = fdpa.MMA_T_FDPA(F, rho, L_max, e_zero=-133)
 
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
         return self.arithmetic_op.dpa(a, b, c)
@@ -142,9 +142,13 @@ class TCGen05MMABlockScale(isa_tcgen05mma.TCGen05MMABlockScale):
     def __init__(self, arch: str, shape_and_type: str):
         super().__init__(arch, shape_and_type)
         if self.k == 64:
-            self.arithmetic_op = fdpa.MMA_GST_FDPA(G=16, F=35, rho="RZ-FP32", L_max=64)
+            self.arithmetic_op = fdpa.MMA_GST_FDPA(
+                G=16, F=35, rho="RZ-FP32", L_max=64, e_zero=-139
+            )
         else:
-            self.arithmetic_op = fdpa.MMA_ST_FDPA(F=25, rho="RZ-FP32", L_max=32)
+            self.arithmetic_op = fdpa.MMA_ST_FDPA(
+                F=25, rho="RZ-FP32", L_max=32, e_zero=-133
+            )
 
     def dpa(
         self,
