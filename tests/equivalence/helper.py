@@ -6,6 +6,17 @@ from mmasim_kernels import MMAKernel, MMABlockScaleKernel
 storage_type = {8: torch.uint64, 4: torch.uint32, 2: torch.uint16, 1: torch.uint8}
 
 
+def get_random_tensor(m, n, dtype: torch.dtype, device="cuda", packing=1):
+    tensor = torch.randint(
+        -(2**31),
+        2**31,
+        [m * n // packing * dtype.itemsize // 4],
+        dtype=torch.int32,
+        device=device,
+    )
+    return tensor.view(dtype).view(m, n // packing)
+
+
 def random_test(
     sim: MMAOperation | MMABlockScaleOperation,
     kernel: MMAKernel | MMABlockScaleKernel,
@@ -23,40 +34,9 @@ def random_test(
         has_block_scale = kernel.block_size > 0
         packing = kernel.packing
     for _ in range(trials):
-        A = (
-            torch.randint(
-                -(2**31),
-                2**31,
-                [m * k // packing * a_type.itemsize // 4],
-                dtype=torch.int32,
-                device="cuda",
-            )
-            .view(a_type)
-            .view(m, k // packing)
-        )
-        B_T = (
-            torch.randint(
-                -(2**31),
-                2**31,
-                [n * k // packing * b_type.itemsize // 4],
-                dtype=torch.int32,
-                device="cuda",
-            )
-            .view(b_type)
-            .view(n, k // packing)
-        )
-        B = B_T.T
-        C = (
-            torch.randint(
-                -(2**31),
-                2**31,
-                [m * n * c_type.itemsize // 4],
-                dtype=torch.int32,
-                device="cuda",
-            )
-            .view(c_type)
-            .view(m, n)
-        )
+        A = get_random_tensor(m, k, a_type, packing=packing)
+        B = get_random_tensor(n, k, b_type, packing=packing).T
+        C = get_random_tensor(m, n, c_type, packing=packing)
         if not has_block_scale:
             assert isinstance(sim, MMAOperation)
             assert isinstance(kernel, MMAOperation)
@@ -66,29 +46,8 @@ def random_test(
             assert isinstance(sim, MMABlockScaleOperation)
             assert isinstance(kernel, MMABlockScaleKernel)
             s_type, block_size = kernel.s_type, kernel.block_size
-            scale_A = (
-                torch.randint(
-                    -(2**31),
-                    2**31,
-                    [m * k // block_size * s_type.itemsize // 4],
-                    dtype=torch.int32,
-                    device="cuda",
-                )
-                .view(s_type)
-                .view(m, k // block_size)
-            )
-            scale_B_T = (
-                torch.randint(
-                    -(2**31),
-                    2**31,
-                    [n * k // block_size * s_type.itemsize // 4],
-                    dtype=torch.int32,
-                    device="cuda",
-                )
-                .view(s_type)
-                .view(n, k // block_size)
-            )
-            scale_B = scale_B_T.T
+            scale_A = get_random_tensor(m, k // block_size, s_type, packing=packing)
+            scale_B = get_random_tensor(n, k // block_size, s_type, packing=packing).T
             D_gpu = kernel(A, B, C, scale_A, scale_B).cpu()
             D_sim = sim(A, B, C, scale_A, scale_B).cpu()
         D_sim_raw = D_sim.view(storage_type[d_type.itemsize])

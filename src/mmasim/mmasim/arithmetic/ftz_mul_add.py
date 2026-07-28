@@ -33,7 +33,7 @@ class MMA_FTZ_MUL_ADD(MMAOperation):
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
         product = ftz_mul(a, b)
         c = flush_subnormal(c, keep_sign=False)
-        for i in range(0, len(a), self.P):
+        for i in range(0, a.shape[-1], self.P):
             s = ftz_add(product[..., i], product[..., i + 1])
             if self.P == 4:
                 s2 = ftz_add(product[..., i + 2], product[..., i + 3])
