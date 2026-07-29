@@ -36,7 +36,7 @@ def random_test(
     for _ in range(trials):
         A = get_random_tensor(m, k, a_type, packing=packing)
         B = get_random_tensor(n, k, b_type, packing=packing).T
-        C = get_random_tensor(m, n, c_type, packing=packing)
+        C = get_random_tensor(m, n, c_type)
         if not has_block_scale:
             assert isinstance(sim, MMAOperation)
             assert isinstance(kernel, MMAOperation)
@@ -46,8 +46,8 @@ def random_test(
             assert isinstance(sim, MMABlockScaleOperation)
             assert isinstance(kernel, MMABlockScaleKernel)
             s_type, block_size = kernel.s_type, kernel.block_size
-            scale_A = get_random_tensor(m, k // block_size, s_type, packing=packing)
-            scale_B = get_random_tensor(n, k // block_size, s_type, packing=packing).T
+            scale_A = get_random_tensor(m, k // block_size, s_type)
+            scale_B = get_random_tensor(n, k // block_size, s_type).T
             D_gpu = kernel(A, B, C, scale_A, scale_B).cpu()
             D_sim = sim(A, B, C, scale_A, scale_B).cpu()
         D_sim_raw = D_sim.view(storage_type[d_type.itemsize])
