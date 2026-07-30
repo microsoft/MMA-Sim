@@ -11,3 +11,6 @@ dependencies = ["torch>=2.7", "ninja"]
 
 [tool.setuptools.packages.find]
 where = ["."]
+
+[tool.setuptools.package-data]
+mmasim = ["arithmetic/fma_cpu.cpp"]
