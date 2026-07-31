@@ -31,10 +31,9 @@ def fma_gpu(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
 
 
 fma_cpu_kernel_path = load(
-    "fma_cpu",
+    "mmasim_fma_cpu",
     [str(Path(__file__).with_name("fma_cpu.cpp"))],
     extra_cflags=["-O3", "-fopenmp"],
-    # build_directory=str(dir),
     is_python_module=False,
 )
 fma_cpu_kernel = ctypes.CDLL(fma_cpu_kernel_path)

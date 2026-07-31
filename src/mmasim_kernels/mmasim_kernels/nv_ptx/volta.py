@@ -1,11 +1,18 @@
 import ctypes
-import pathlib
+from pathlib import Path
 
+from torch.utils.cpp_extension import load
 from . import MMA
 
-
-path = pathlib.Path(__file__).parent / "kernels/volta.so"
-lib = ctypes.CDLL(str(path))
+dir = Path(__file__).with_name("kernels")
+files = [dir / f for f in ["mma_sm70.cu"]]
+kernel_path = load(
+    "mmasim_kernels_nv_volta",
+    [str(f) for f in files],
+    extra_cuda_cflags=["-arch=compute_70", "-code=sm_70"],
+    is_python_module=False,
+)
+lib = ctypes.CDLL(kernel_path)
 
 # f16
 lib.mma_m8n8k4_f32_f16_f16_f32.argtypes = [ctypes.c_void_p] * 4
