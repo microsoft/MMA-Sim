@@ -1,10 +1,18 @@
 import ctypes
-import pathlib
+from pathlib import Path
 
+from torch.utils.cpp_extension import load
 from . import MFMA
 
-path = pathlib.Path(__file__).parent / "kernels/cdna3.so"
-lib = ctypes.CDLL(str(path))
+dir = Path(__file__).with_name("kernels")
+files = [dir / f for f in ["mfma_cdna3.hip"]]
+kernel_path = load(
+    "mmasim_kernels_amd_cdna3",
+    [str(f) for f in files],
+    extra_cflags=["--offload-arch=gfx942"],
+    is_python_module=False,
+)
+lib = ctypes.CDLL(kernel_path)
 
 # f64
 lib.mfma_f64_16x16x4_f64.argtypes = [ctypes.c_void_p] * 4

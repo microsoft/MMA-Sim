@@ -1,5 +1,7 @@
 # MMA-Sim: Bit-Accurate Modeling of GPU Matrix Multiply-Accumulate Units
 
+![PyPI Version](https://img.shields.io/pypi/v/mmasim)
+
 MMA-Sim models the non-standard arithmetic behaviors of GPU matrix multiply-accumulate units such as [Tensor Cores](https://www.nvidia.com/en-us/data-center/tensor-cores/) and [Matrix Cores](https://www.amd.com/en/technologies/cdna.html). For an architecture-specific matrix multiply-accumulate (MMA) instruction, MMA-Sim simulates the MMA operation `D=A*B+C` and produces outputs **bit-wise identical** to the outputs of the GPU MMA instruction.
 
 ```mermaid

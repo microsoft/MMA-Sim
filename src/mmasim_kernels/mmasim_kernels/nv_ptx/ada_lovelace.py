@@ -1,10 +1,18 @@
 import ctypes
-import pathlib
+from pathlib import Path
 
+from torch.utils.cpp_extension import load
 from . import MMA
 
-path = pathlib.Path(__file__).parent / "kernels/ada_lovelace.so"
-lib = ctypes.CDLL(str(path))
+dir = Path(__file__).with_name("kernels")
+files = [dir / f for f in ["mma_sm89.cu", "mma_sm80.cu", "mma_sm75.cu"]]
+kernel_path = load(
+    "mmasim_kernels_nv_ada_lovelace",
+    [str(f) for f in files],
+    extra_cuda_cflags=["-arch=compute_89", "-code=sm_89"],
+    is_python_module=False,
+)
+lib = ctypes.CDLL(kernel_path)
 
 # sm_89 fp8 m16n8k32 f32_output
 lib.mma_m16n8k32_f32_e5m2_e5m2_f32.argtypes = [ctypes.c_void_p] * 4

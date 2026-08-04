@@ -208,16 +208,21 @@ def gst_fdpa(
     e_zero: int,
 ) -> torch.Tensor:  # [...]
     p = a.float() * b.float()
-    p = p.view(*p.shape[:-1], -1, G).sum(dim=-1)  # [..., K//G]
+    p = p.view(*p.shape[:-1], -1, G)  # [..., K//G, G]
+    apply_e_zero = (p == 0.0).all(dim=-1)  # [..., K//G]
+    p = p.sum(dim=-1)  # zeros resulted from summation do not apply e_zero
     K_block = a.shape[-1] // alpha.shape[-1]
     alpha = torch.repeat_interleave(alpha, K_block // G, dim=-1)  # [..., K//G]
     beta = torch.repeat_interleave(beta, K_block // G, dim=-1)  # [..., K//G]
     s_alpha, e_alpha = frexp_and_normalize(alpha)
     s_beta, e_beta = frexp_and_normalize(beta)
+    s_scale, e_scale = s_alpha * s_beta, e_alpha + e_beta
+    apply_e_zero |= s_scale == 0.0
+    e_scale[apply_e_zero] = e_zero
     s_c, e_c = frexp_and_normalize(c)
-    s = torch.cat([p * s_alpha * s_beta, s_c.unsqueeze(-1)], dim=-1)
-    e = torch.cat([e_alpha + e_beta, e_c.unsqueeze(-1)], dim=-1)
-    e[s == 0.0] = e_zero  # handle zero
+    e_c[s_c == 0.0] = e_zero
+    s = torch.cat([p * s_scale, s_c.unsqueeze(-1)], dim=-1)
+    e = torch.cat([e_scale, e_c.unsqueeze(-1)], dim=-1)
     sum, e_max = truncated_fused_sum(s, e, F)
     return ldexp_and_normalize(sum, e_max, rho)
 
