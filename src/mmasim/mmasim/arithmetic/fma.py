@@ -3,31 +3,36 @@ from pathlib import Path
 
 import torch
 from torch.utils.cpp_extension import load
-import triton
-import triton.language as tl
-from triton.language.extra import libdevice
 
 from .. import MMAOperation
 
+if torch.cuda.is_available():
+    import triton
+    import triton.language as tl
+    from triton.language.extra import libdevice
 
-@triton.jit
-def fma_gpu_kernel(a_ptr, b_ptr, c_ptr, d_ptr, n, BLOCK: tl.constexpr):
-    offs = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
-    mask = offs < n
-    a = tl.load(a_ptr + offs, mask=mask)
-    b = tl.load(b_ptr + offs, mask=mask)
-    c = tl.load(c_ptr + offs, mask=mask)
-    tl.store(d_ptr + offs, libdevice.fma(a, b, c), mask=mask)
+    @triton.jit
+    def fma_gpu_kernel(a_ptr, b_ptr, c_ptr, d_ptr, n, BLOCK: tl.constexpr):
+        offs = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+        mask = offs < n
+        a = tl.load(a_ptr + offs, mask=mask)
+        b = tl.load(b_ptr + offs, mask=mask)
+        c = tl.load(c_ptr + offs, mask=mask)
+        tl.store(d_ptr + offs, libdevice.fma(a, b, c), mask=mask)
 
+    def fma_gpu(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+        a, b, c = a.contiguous(), b.contiguous(), c.contiguous()
+        out = torch.empty_like(a)
+        n = a.numel()
+        fma_gpu_kernel[lambda meta: (triton.cdiv(n, meta["BLOCK"]),)](
+            a, b, c, out, n, BLOCK=1024  # type: ignore
+        )
+        return out
 
-def fma_gpu(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-    a, b, c = a.contiguous(), b.contiguous(), c.contiguous()
-    out = torch.empty_like(a)
-    n = a.numel()
-    fma_gpu_kernel[lambda meta: (triton.cdiv(n, meta["BLOCK"]),)](
-        a, b, c, out, n, BLOCK=1024  # type: ignore
-    )
-    return out
+else:
+
+    def fma_gpu(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+        raise RuntimeError("torch.cuda.is_available() is False")
 
 
 fma_cpu_kernel_path = load(
