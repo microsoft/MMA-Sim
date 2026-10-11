@@ -58,6 +58,8 @@ def ldexp_and_normalize(s: DoubleTensor, e: IntTensor, rho: str) -> torch.Tensor
         else:  # "RZ-FP32"
             s = torch.trunc(s * 2.0**23) * 2.0**-23  # RZ
         res = (s * pow2(e)).to(torch.float32)
+    if rho != "RNE-FP32":  # NVIDIA MMA units return +0 for a zero result
+        res[res == 0.0] = 0.0
     nans = res.isnan()
     if res.dtype == torch.float16:
         res = res.view(torch.int16)
