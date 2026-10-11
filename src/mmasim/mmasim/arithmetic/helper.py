@@ -55,3 +55,9 @@ def unpack_uint8_to_fp4(x: torch.Tensor) -> torch.Tensor:
     low = x & 0x0F
     unpacked = torch.stack([high, low], dim=-1).view(x.shape[:-1] + (-1,))
     return fp4_value_table.to(x.device)[unpacked.int()]
+
+
+def decode_uint8_to_fp4(x: torch.Tensor) -> torch.Tensor:
+    assert x.dtype == torch.uint8
+    x = (x >> 2) & 0x0F  # e2m1 sits in bits 5:2 of the 8-bit container
+    return fp4_value_table.to(x.device)[x.int()]

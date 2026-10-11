@@ -73,6 +73,18 @@ def test_e_zero_f16_accumulator():
     print("Tests passed!")
 
 
+def test_e2m1_f8f6f4():
+    # a * b = 0.25 is 0.01b * 2^0, so C = -(0.25 - 2^-26) loses its last bit
+    sim = TCGen05MMA("Blackwell", "m128n8k32.f32.e2m1.e2m1")
+    print(f"Testing {sim.arch} {sim.shape_and_type}")
+    a = torch.zeros(sim.k, dtype=torch.uint8)
+    a[0] = 0x1 << 2  # e2m1 sits in bits 5:2 of the 8-bit container
+    d = sim.dpa(a, a, torch.tensor(-(0.25 - 2.0**-26), dtype=torch.float32))
+    assert raw(d) == 0x33000000, f"D_sim = {raw(d):#x}, D_gpu = 0x33000000"
+    print("Tests passed!")
+
+
 if __name__ == "__main__":
     test_zero_result_is_positive()
     test_e_zero_f16_accumulator()
+    test_e2m1_f8f6f4()
