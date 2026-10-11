@@ -2,7 +2,7 @@ import torch
 
 from mmasim.nv_ptx import MMA, WGMMA, TCGen05MMA
 
-# Expected D bits are measured on H200 (Hopper) and B300 (Blackwell)
+# Expected D bits are measured on H200 (Hopper), B300 and B200 (Blackwell)
 
 
 def vector(dtype: torch.dtype, k: int, entries: dict[int, float]) -> torch.Tensor:
@@ -46,3 +46,33 @@ def test_zero_result_is_positive():
     ]:
         print(f"Testing {sim.arch} {sim.shape_and_type}")
         directed_test(sim, a, b, c, 0)
+    print("Tests passed!")
+
+
+def test_e_zero_f16_accumulator():
+    # a zero f16 C anchors the fused sum at 2^-21
+    hopper = [
+        WGMMA("Hopper", "m64n8k16.f16.f16.f16"),
+    ]
+    for sim in hopper:
+        print(f"Testing {sim.arch} {sim.shape_and_type}")
+        # 2^-25 is a tie at the f16 subnormal step, 2^-q breaks it iff q <= 46
+        for q, expected in [(46, 0x0001), (47, 0x0000)]:
+            a, b = {0: 2.0**-12, 1: 2.0**-23}, {0: 2.0**-13, 1: 2.0 ** (23 - q)}
+            directed_test(sim, a, b, 0.0, expected)
+    blackwell = [
+        TCGen05MMA("Blackwell", "m64n8k16.f16.f16.f16"),
+        MMA("Blackwell", "m16n8k16.f16.f16.f16.f16"),
+    ]
+    for sim in blackwell:
+        print(f"Testing {sim.arch} {sim.shape_and_type}")
+        # 1.5 * 2^-23 + 2^-25 is a tie, -2^-47 is below the 2^-46 grid
+        a = {0: 1.5 * 2.0**-12, 1: 2.0**-13, 2: -(2.0**-24)}
+        b = {0: 2.0**-11, 1: 2.0**-12, 2: 2.0**-23}
+        directed_test(sim, a, b, 0.0, 0x0004)
+    print("Tests passed!")
+
+
+if __name__ == "__main__":
+    test_zero_result_is_positive()
+    test_e_zero_f16_accumulator()

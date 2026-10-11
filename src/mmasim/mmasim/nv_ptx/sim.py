@@ -42,9 +42,9 @@ class MMA(isa_mma.MMA):
                 e_zero = -20 if self.c_type == torch.float16 else -131
             elif self.arch in ["Turing", "Ampere", "Ada Lovelace"]:
                 e_zero = -21 if self.c_type == torch.float16 else -132
-            elif self.arch == "Hopper":
+            elif self.arch in ["Hopper", "Blackwell"]:
                 e_zero = -21 if self.c_type == torch.float16 else -133
-            else:  # Blackwell, RTX Blackwell
+            else:  # RTX Blackwell
                 e_zero = -22 if self.c_type == torch.float16 else -133
             self.arithmetic_op = fdpa.MMA_T_FDPA(F, rho, L_max, e_zero)
 
@@ -106,7 +106,8 @@ class WGMMA(isa_wgmma.WGMMA):
             F = 25
             rho = "RNE-FP16" if self.d_type == torch.float16 else "RZ-FP32"
         L_max = 32 // self.a_type.itemsize
-        self.arithmetic_op = fdpa.MMA_T_FDPA(F, rho, L_max, e_zero=-133)
+        e_zero = -21 if self.c_type == torch.float16 else -133
+        self.arithmetic_op = fdpa.MMA_T_FDPA(F, rho, L_max, e_zero)
 
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
         return self.arithmetic_op.dpa(a, b, c)
@@ -126,7 +127,8 @@ class TCGen05MMA(isa_tcgen05mma.TCGen05MMA):
         F = 25
         rho = "RNE-FP16" if self.d_type == torch.float16 else "RZ-FP32"
         L_max = 32 // self.a_type.itemsize
-        self.arithmetic_op = fdpa.MMA_T_FDPA(F, rho, L_max, e_zero=-133)
+        e_zero = -21 if self.c_type == torch.float16 else -133
+        self.arithmetic_op = fdpa.MMA_T_FDPA(F, rho, L_max, e_zero)
 
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
         return self.arithmetic_op.dpa(a, b, c)
