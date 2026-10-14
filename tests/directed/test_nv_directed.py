@@ -4,6 +4,8 @@ from mmasim.nv_ptx import MMA, WGMMA, TCGen05MMA
 
 # Expected D bits are measured on H200 (Hopper), B300 and B200 (Blackwell)
 
+storage_type = {4: torch.uint32, 2: torch.uint16}
+
 
 def vector(dtype: torch.dtype, k: int, entries: dict[int, float]) -> torch.Tensor:
     x = torch.zeros(k, dtype=torch.float32)
@@ -13,9 +15,7 @@ def vector(dtype: torch.dtype, k: int, entries: dict[int, float]) -> torch.Tenso
 
 
 def raw(x: torch.Tensor) -> int:
-    if x.dtype == torch.float16:
-        return int(x.view(torch.int16).item()) & 0xFFFF
-    return int(x.view(torch.int32).item()) & 0xFFFFFFFF
+    return x.view(storage_type[x.dtype.itemsize]).item()
 
 
 def directed_test(sim, a: dict, b: dict, c: float, expected: int):
@@ -51,20 +51,16 @@ def test_zero_result_is_positive():
 
 def test_e_zero_f16_accumulator():
     # a zero f16 C anchors the fused sum at 2^-21
-    hopper = [
-        WGMMA("Hopper", "m64n8k16.f16.f16.f16"),
-    ]
-    for sim in hopper:
-        print(f"Testing {sim.arch} {sim.shape_and_type}")
-        # 2^-25 is a tie at the f16 subnormal step, 2^-q breaks it iff q <= 46
-        for q, expected in [(46, 0x0001), (47, 0x0000)]:
-            a, b = {0: 2.0**-12, 1: 2.0**-23}, {0: 2.0**-13, 1: 2.0 ** (23 - q)}
-            directed_test(sim, a, b, 0.0, expected)
-    blackwell = [
+    sim = WGMMA("Hopper", "m64n8k16.f16.f16.f16")
+    print(f"Testing {sim.arch} {sim.shape_and_type}")
+    # 2^-25 is a tie at the f16 subnormal step, 2^-q breaks it iff q <= 46
+    for q, expected in [(46, 0x0001), (47, 0x0000)]:
+        a, b = {0: 2.0**-12, 1: 2.0**-23}, {0: 2.0**-13, 1: 2.0 ** (23 - q)}
+        directed_test(sim, a, b, 0.0, expected)
+    for sim in [
         TCGen05MMA("Blackwell", "m64n8k16.f16.f16.f16"),
         MMA("Blackwell", "m16n8k16.f16.f16.f16.f16"),
-    ]
-    for sim in blackwell:
+    ]:
         print(f"Testing {sim.arch} {sim.shape_and_type}")
         # 1.5 * 2^-23 + 2^-25 is a tie, -2^-47 is below the 2^-46 grid
         a = {0: 1.5 * 2.0**-12, 1: 2.0**-13, 2: -(2.0**-24)}
@@ -77,10 +73,19 @@ def test_e2m1_f8f6f4():
     # a * b = 0.25 is 0.01b * 2^0, so C = -(0.25 - 2^-26) loses its last bit
     sim = TCGen05MMA("Blackwell", "m128n8k32.f32.e2m1.e2m1")
     print(f"Testing {sim.arch} {sim.shape_and_type}")
-    a = torch.zeros(sim.k, dtype=torch.uint8)
-    a[0] = 0x1 << 2  # e2m1 sits in bits 5:2 of the 8-bit container
-    d = sim.dpa(a, a, torch.tensor(-(0.25 - 2.0**-26), dtype=torch.float32))
-    assert raw(d) == 0x33000000, f"D_sim = {raw(d):#x}, D_gpu = 0x33000000"
+    # e2m1 sits in bits 5:2 of the 8-bit container
+    a = b = {0: 0x1 << 2}
+    directed_test(sim, a, b, -(0.25 - 2.0**-26), 0x33000000)
+    print("Tests passed!")
+
+
+def test_e3m2_f8f6f4():
+    # a * b = 2^-8 is 0.0001b * 2^-4, so C = -(2^-8 - 2^-30) loses its last bit
+    sim = TCGen05MMA("Blackwell", "m64n8k32.f32.e3m2.e3m2")
+    print(f"Testing {sim.arch} {sim.shape_and_type}")
+    # e3m2 sits in bits 5:0 of the 8-bit container, bits 7:6 are ignored
+    a = b = {0: 0xC0 | 0x01}
+    directed_test(sim, a, b, -(2.0**-8 - 2.0**-30), 0x31000000)
     print("Tests passed!")
 
 
@@ -88,3 +93,4 @@ if __name__ == "__main__":
     test_zero_result_is_positive()
     test_e_zero_f16_accumulator()
     test_e2m1_f8f6f4()
+    test_e3m2_f8f6f4()

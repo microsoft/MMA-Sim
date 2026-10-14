@@ -28,14 +28,16 @@ class TCGen05MMA(MMAOperation):
             else:  # d_type == "f16"
                 assert a_type == b_type == "f16"
         else:  # k == 32, kind::f8f6f4
-            assert a_type in ["e5m2", "e4m3", "e2m1"]  # TODO: support e3m2 and e2m3
-            assert b_type in ["e5m2", "e4m3", "e2m1"]
+            assert a_type in ["e5m2", "e4m3", "e3m2", "e2m3", "e2m1"]
+            assert b_type in ["e5m2", "e4m3", "e3m2", "e2m3", "e2m1"]
             assert d_type in ["f32", "f16"]
         self.arch = arch
         self.shape_and_type = shape_and_type
         self.m, self.n, self.k = m, n, k
         self.a_type = nv_torch_dtype[a_type]
         self.b_type = nv_torch_dtype[b_type]
+        self.a_ptx_type = a_type
+        self.b_ptx_type = b_type
         self.c_type = nv_torch_dtype[d_type]
         self.d_type = nv_torch_dtype[d_type]
 
@@ -52,8 +54,8 @@ class TCGen05MMABlockScale(MMABlockScaleOperation):
         assert k in [32, 64]
         assert d_type == "f32"
         if k == 32:  # kind::mxf8f6f4
-            assert a_type in ["e5m2", "e4m3", "e2m1"]  # TODO: support e3m2 and e2m3
-            assert b_type in ["e5m2", "e4m3", "e2m1"]
+            assert a_type in ["e5m2", "e4m3", "e3m2", "e2m3", "e2m1"]
+            assert b_type in ["e5m2", "e4m3", "e3m2", "e2m3", "e2m1"]
             assert s_type == "ue8m0"
             assert block_size == "block32"
         else:  # k == 64, kind::mxf4nvf4
@@ -71,6 +73,8 @@ class TCGen05MMABlockScale(MMABlockScaleOperation):
         self.packing = 2 if k == 64 else 1
         self.a_type = nv_torch_dtype[a_type]
         self.b_type = nv_torch_dtype[b_type]
+        self.a_ptx_type = a_type
+        self.b_ptx_type = b_type
         self.c_type = nv_torch_dtype[d_type]
         self.d_type = nv_torch_dtype[d_type]
         self.s_type = nv_torch_dtype[s_type]

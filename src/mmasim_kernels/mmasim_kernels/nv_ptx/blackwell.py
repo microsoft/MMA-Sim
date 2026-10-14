@@ -38,13 +38,25 @@ lib.tcgen05mma_m64n8k16_f16_f16_f16.argtypes = [ctypes.c_void_p] * 3
 # sm_100a fp8 f32_output
 lib.tcgen05mma_m64n8k32_f32_e5m2_e5m2.argtypes = [ctypes.c_void_p] * 3
 lib.tcgen05mma_m64n8k32_f32_e4m3_e4m3.argtypes = [ctypes.c_void_p] * 3
+# sm_100a fp6 and fp4 f32_output
+lib.tcgen05mma_m64n8k32_f32_e3m2_e3m2.argtypes = [ctypes.c_void_p] * 3
+lib.tcgen05mma_m64n8k32_f32_e2m3_e2m3.argtypes = [ctypes.c_void_p] * 3
+lib.tcgen05mma_m64n8k32_f32_e2m1_e2m1.argtypes = [ctypes.c_void_p] * 3
 # sm_100a fp8 f16_output
 lib.tcgen05mma_m64n8k32_f16_e5m2_e5m2.argtypes = [ctypes.c_void_p] * 3
 lib.tcgen05mma_m64n8k32_f16_e4m3_e4m3.argtypes = [ctypes.c_void_p] * 3
+# sm_100a fp6 and fp4 f16_output
+lib.tcgen05mma_m64n8k32_f16_e3m2_e3m2.argtypes = [ctypes.c_void_p] * 3
+lib.tcgen05mma_m64n8k32_f16_e2m3_e2m3.argtypes = [ctypes.c_void_p] * 3
+lib.tcgen05mma_m64n8k32_f16_e2m1_e2m1.argtypes = [ctypes.c_void_p] * 3
 
 # sm_100a mxf8f6f4
 lib.tcgen05mma_m128n8k32_block32_f32_e5m2_e5m2_ue8m0.argtypes = [ctypes.c_void_p] * 5
 lib.tcgen05mma_m128n8k32_block32_f32_e4m3_e4m3_ue8m0.argtypes = [ctypes.c_void_p] * 5
+# sm_100a mxf8f6f4 fp6 and fp4
+lib.tcgen05mma_m128n8k32_block32_f32_e3m2_e3m2_ue8m0.argtypes = [ctypes.c_void_p] * 5
+lib.tcgen05mma_m128n8k32_block32_f32_e2m3_e2m3_ue8m0.argtypes = [ctypes.c_void_p] * 5
+lib.tcgen05mma_m128n8k32_block32_f32_e2m1_e2m1_ue8m0.argtypes = [ctypes.c_void_p] * 5
 # sm_100a mxf4 and nvf4
 lib.tcgen05mma_m128n8k64_block32_f32_e2m1_e2m1_ue8m0.argtypes = [ctypes.c_void_p] * 5
 lib.tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue8m0.argtypes = [ctypes.c_void_p] * 5
@@ -76,14 +88,26 @@ tcgen05mma_cuda_kernels = {
     # sm_100a fp8 f32_output
     "m64n8k32.f32.e5m2.e5m2": lib.tcgen05mma_m64n8k32_f32_e5m2_e5m2,
     "m64n8k32.f32.e4m3.e4m3": lib.tcgen05mma_m64n8k32_f32_e4m3_e4m3,
+    # sm_100a fp6 and fp4 f32_output
+    "m64n8k32.f32.e3m2.e3m2": lib.tcgen05mma_m64n8k32_f32_e3m2_e3m2,
+    "m64n8k32.f32.e2m3.e2m3": lib.tcgen05mma_m64n8k32_f32_e2m3_e2m3,
+    "m64n8k32.f32.e2m1.e2m1": lib.tcgen05mma_m64n8k32_f32_e2m1_e2m1,
     # sm_100a fp8 f16_output
     "m64n8k32.f16.e5m2.e5m2": lib.tcgen05mma_m64n8k32_f16_e5m2_e5m2,
     "m64n8k32.f16.e4m3.e4m3": lib.tcgen05mma_m64n8k32_f16_e4m3_e4m3,
+    # sm_100a fp6 and fp4 f16_output
+    "m64n8k32.f16.e3m2.e3m2": lib.tcgen05mma_m64n8k32_f16_e3m2_e3m2,
+    "m64n8k32.f16.e2m3.e2m3": lib.tcgen05mma_m64n8k32_f16_e2m3_e2m3,
+    "m64n8k32.f16.e2m1.e2m1": lib.tcgen05mma_m64n8k32_f16_e2m1_e2m1,
 }
 tcgen05mma_block_scale_cuda_kernels = {
     # sm_100a mxf8f6f4
     "m128n8k32.block32.f32.e5m2.e5m2.ue8m0": lib.tcgen05mma_m128n8k32_block32_f32_e5m2_e5m2_ue8m0,
     "m128n8k32.block32.f32.e4m3.e4m3.ue8m0": lib.tcgen05mma_m128n8k32_block32_f32_e4m3_e4m3_ue8m0,
+    # sm_100a mxf8f6f4 fp6 and fp4
+    "m128n8k32.block32.f32.e3m2.e3m2.ue8m0": lib.tcgen05mma_m128n8k32_block32_f32_e3m2_e3m2_ue8m0,
+    "m128n8k32.block32.f32.e2m3.e2m3.ue8m0": lib.tcgen05mma_m128n8k32_block32_f32_e2m3_e2m3_ue8m0,
+    "m128n8k32.block32.f32.e2m1.e2m1.ue8m0": lib.tcgen05mma_m128n8k32_block32_f32_e2m1_e2m1_ue8m0,
     # sm_100a mxf4 and nvf4
     "m128n8k64.block32.f32.e2m1.e2m1.ue8m0": lib.tcgen05mma_m128n8k64_block32_f32_e2m1_e2m1_ue8m0,
     "m128n8k64.block16.f32.e2m1.e2m1.ue8m0": lib.tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue8m0,

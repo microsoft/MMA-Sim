@@ -134,6 +134,112 @@
         a_desc |= 1ll << 46;                                        \
     } while (0)
 
+// (16x2) tiles, each with (8x16) elements, packed in 12 bytes
+#define LOAD_A_M128K32_FP6()                                    \
+    do                                                          \
+    {                                                           \
+        for (uint32_t i = 0; i < 16; i++)                       \
+        {                                                       \
+            for (uint32_t k = 0; k < 2; k++)                    \
+            {                                                   \
+                uint32_t row = i * 8 + tid / 16;                \
+                uint32_t col = k * 16 + tid % 16 * 8 / 6;       \
+                uint32_t shift = tid % 16 * 8 % 6;              \
+                uint8_t x = 0;                                  \
+                if (tid % 16 < 12)                              \
+                {                                               \
+                    uint8_t lo = a[row * K + col] & 0x3f;       \
+                    uint8_t hi = a[row * K + col + 1] & 0x3f;   \
+                    x = lo >> shift | hi << (6 - shift);        \
+                }                                               \
+                a_smem[i * 256 + k * 128 + tid] = x;            \
+            }                                                   \
+        }                                                       \
+        a_desc = desc_encode(__cvta_generic_to_shared(a_smem)); \
+        a_desc |= desc_encode(128ll) << 16;                     \
+        a_desc |= desc_encode(256ll) << 32;                     \
+        a_desc |= 1ll << 46;                                    \
+    } while (0)
+
+// (8x2) tiles, each with (8x16) elements, packed in 12 bytes
+#define LOAD_A_M64K32_FP6()                                     \
+    do                                                          \
+    {                                                           \
+        for (uint32_t i = 0; i < 8; i++)                        \
+        {                                                       \
+            for (uint32_t k = 0; k < 2; k++)                    \
+            {                                                   \
+                uint32_t row = i * 8 + tid / 16;                \
+                uint32_t col = k * 16 + tid % 16 * 8 / 6;       \
+                uint32_t shift = tid % 16 * 8 % 6;              \
+                uint8_t x = 0;                                  \
+                if (tid % 16 < 12)                              \
+                {                                               \
+                    uint8_t lo = a[row * K + col] & 0x3f;       \
+                    uint8_t hi = a[row * K + col + 1] & 0x3f;   \
+                    x = lo >> shift | hi << (6 - shift);        \
+                }                                               \
+                a_smem[i * 256 + k * 128 + tid] = x;            \
+            }                                                   \
+        }                                                       \
+        a_desc = desc_encode(__cvta_generic_to_shared(a_smem)); \
+        a_desc |= desc_encode(128ll) << 16;                     \
+        a_desc |= desc_encode(256ll) << 32;                     \
+        a_desc |= 1ll << 46;                                    \
+    } while (0)
+
+// (16x2) tiles, each with (8x16) elements, packed in 8 bytes
+#define LOAD_A_M128K32_FP4()                                      \
+    do                                                            \
+    {                                                             \
+        for (uint32_t i = 0; i < 16; i++)                         \
+        {                                                         \
+            for (uint32_t k = 0; k < 2; k++)                      \
+            {                                                     \
+                uint32_t row = i * 8 + tid / 16;                  \
+                uint32_t col = k * 16 + tid % 16 * 2;             \
+                uint8_t x = 0;                                    \
+                if (tid % 16 < 8)                                 \
+                {                                                 \
+                    uint8_t lo = a[row * K + col] >> 2 & 0xf;     \
+                    uint8_t hi = a[row * K + col + 1] >> 2 & 0xf; \
+                    x = lo | hi << 4;                             \
+                }                                                 \
+                a_smem[i * 256 + k * 128 + tid] = x;              \
+            }                                                     \
+        }                                                         \
+        a_desc = desc_encode(__cvta_generic_to_shared(a_smem));   \
+        a_desc |= desc_encode(128ll) << 16;                       \
+        a_desc |= desc_encode(256ll) << 32;                       \
+        a_desc |= 1ll << 46;                                      \
+    } while (0)
+
+// (8x2) tiles, each with (8x16) elements, packed in 8 bytes
+#define LOAD_A_M64K32_FP4()                                       \
+    do                                                            \
+    {                                                             \
+        for (uint32_t i = 0; i < 8; i++)                          \
+        {                                                         \
+            for (uint32_t k = 0; k < 2; k++)                      \
+            {                                                     \
+                uint32_t row = i * 8 + tid / 16;                  \
+                uint32_t col = k * 16 + tid % 16 * 2;             \
+                uint8_t x = 0;                                    \
+                if (tid % 16 < 8)                                 \
+                {                                                 \
+                    uint8_t lo = a[row * K + col] >> 2 & 0xf;     \
+                    uint8_t hi = a[row * K + col + 1] >> 2 & 0xf; \
+                    x = lo | hi << 4;                             \
+                }                                                 \
+                a_smem[i * 256 + k * 128 + tid] = x;              \
+            }                                                     \
+        }                                                         \
+        a_desc = desc_encode(__cvta_generic_to_shared(a_smem));   \
+        a_desc |= desc_encode(128ll) << 16;                       \
+        a_desc |= desc_encode(256ll) << 32;                       \
+        a_desc |= 1ll << 46;                                      \
+    } while (0)
+
 // (16x2) tiles, each with (8x32) elements
 #define LOAD_A_M128K64_FP4()                                                \
     do                                                                      \
@@ -191,6 +297,53 @@
             uint32_t row = k * 16 + tid % 16;                   \
             uint32_t col = tid / 16;                            \
             b_smem[k * 128 + tid] = b[col * K + row];           \
+        }                                                       \
+        b_desc = desc_encode(__cvta_generic_to_shared(b_smem)); \
+        b_desc |= desc_encode(128ll) << 16;                     \
+        b_desc |= desc_encode(256ll) << 32;                     \
+        b_desc |= 1ll << 46;                                    \
+    } while (0)
+
+// (2x1) tiles, each with (16x8) elements, packed in 12 bytes
+#define LOAD_B_N8K32_FP6()                                      \
+    do                                                          \
+    {                                                           \
+        for (uint32_t k = 0; k < 2; k++)                        \
+        {                                                       \
+            uint32_t row = k * 16 + tid % 16 * 8 / 6;           \
+            uint32_t col = tid / 16;                            \
+            uint32_t shift = tid % 16 * 8 % 6;                  \
+            uint8_t x = 0;                                      \
+            if (tid % 16 < 12)                                  \
+            {                                                   \
+                uint8_t lo = b[col * K + row] & 0x3f;           \
+                uint8_t hi = b[col * K + row + 1] & 0x3f;       \
+                x = lo >> shift | hi << (6 - shift);            \
+            }                                                   \
+            b_smem[k * 128 + tid] = x;                          \
+        }                                                       \
+        b_desc = desc_encode(__cvta_generic_to_shared(b_smem)); \
+        b_desc |= desc_encode(128ll) << 16;                     \
+        b_desc |= desc_encode(256ll) << 32;                     \
+        b_desc |= 1ll << 46;                                    \
+    } while (0)
+
+// (2x1) tiles, each with (16x8) elements, packed in 8 bytes
+#define LOAD_B_N8K32_FP4()                                      \
+    do                                                          \
+    {                                                           \
+        for (uint32_t k = 0; k < 2; k++)                        \
+        {                                                       \
+            uint32_t row = k * 16 + tid % 16 * 2;               \
+            uint32_t col = tid / 16;                            \
+            uint8_t x = 0;                                      \
+            if (tid % 16 < 8)                                   \
+            {                                                   \
+                uint8_t lo = b[col * K + row] >> 2 & 0xf;       \
+                uint8_t hi = b[col * K + row + 1] >> 2 & 0xf;   \
+                x = lo | hi << 4;                               \
+            }                                                   \
+            b_smem[k * 128 + tid] = x;                          \
         }                                                       \
         b_desc = desc_encode(__cvta_generic_to_shared(b_smem)); \
         b_desc |= desc_encode(128ll) << 16;                     \
