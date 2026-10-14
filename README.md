@@ -30,8 +30,8 @@ Example:
 
 ```python
 import torch
-from mmasim.nv_ptx.sim import MMA  # for "mma.sync" instructions
-from mmasim.amd.sim import MFMA  # for "v_mfma" instructions
+from mmasim.nv_ptx import MMA  # for "mma.sync" instructions
+from mmasim.amd import MFMA  # for "v_mfma" instructions
 
 # mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 (PTX)
 # or HMMA.16816.F32 (SASS)
@@ -66,7 +66,7 @@ Example:
 
 ```python
 import torch
-from mmasim.nv_ptx.sim import MMA
+from mmasim.nv_ptx import MMA
 from mmasim_kernels.nv_ptx.rtx_blackwell import mma_kernels
 
 mma_sim = MMA("RTX Blackwell", "m16n8k16.f32.f16.f16.f32")
@@ -86,7 +86,12 @@ Additionally, you can run test scripts in [tests/equivalence](tests/equivalence)
 ## Citation
 
 ```
-Coming soon
+@inproceedings{xie_bit-accurate_2026,
+	title = {Bit-{Accurate} {Modeling} of {GPU} {Matrix} {Multiply}-{Accumulate} {Units}: {Demystifying} {Numerical} {Discrepancy} and {Accuracy}},
+	booktitle = {Annual {IEEE}/{ACM} {International} {Symposium} on {Microarchitecture} ({MICRO})},
+	author = {Xie, Peichen and Xu, Shuotao and Wang, Yang and Yang, Fan and Yang, Mao},
+	year = {2026},
+}
 ```
 
 ## Contributing
