@@ -32,5 +32,7 @@ class WGMMA(MMAOperation):
         self.m, self.n, self.k = m, n, k
         self.a_type = nv_torch_dtype[a_type]
         self.b_type = nv_torch_dtype[b_type]
+        self.a_type_ptx = a_type
+        self.b_type_ptx = b_type
         self.c_type = nv_torch_dtype[d_type]
         self.d_type = nv_torch_dtype[d_type]

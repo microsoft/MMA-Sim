@@ -36,8 +36,8 @@ class TCGen05MMA(MMAOperation):
         self.m, self.n, self.k = m, n, k
         self.a_type = nv_torch_dtype[a_type]
         self.b_type = nv_torch_dtype[b_type]
-        self.a_ptx_type = a_type
-        self.b_ptx_type = b_type
+        self.a_type_ptx = a_type
+        self.b_type_ptx = b_type
         self.c_type = nv_torch_dtype[d_type]
         self.d_type = nv_torch_dtype[d_type]
 
@@ -73,8 +73,8 @@ class TCGen05MMABlockScale(MMABlockScaleOperation):
         self.packing = 2 if k == 64 else 1
         self.a_type = nv_torch_dtype[a_type]
         self.b_type = nv_torch_dtype[b_type]
-        self.a_ptx_type = a_type
-        self.b_ptx_type = b_type
+        self.a_type_ptx = a_type
+        self.b_type_ptx = b_type
         self.c_type = nv_torch_dtype[d_type]
         self.d_type = nv_torch_dtype[d_type]
         self.s_type = nv_torch_dtype[s_type]

@@ -45,7 +45,7 @@ class MMA(isa_mma.MMA):
             else:  # Hopper, Blackwell, RTX Blackwell
                 e_zero = -21 if self.c_type == torch.float16 else -133
             self.arithmetic_op = fdpa.MMA_T_FDPA(
-                F, rho, L_max, e_zero, self.a_ptx_type, self.b_ptx_type
+                F, rho, L_max, e_zero, self.a_type_ptx, self.b_type_ptx
             )
 
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
@@ -73,8 +73,8 @@ class MMABlockScale(isa_mma.MMABlockScale):
                 rho="RZ-FP32",
                 L_max=32,
                 e_zero=-133,
-                a_ptx_type=self.a_ptx_type,
-                b_ptx_type=self.b_ptx_type,
+                a_type_ptx=self.a_type_ptx,
+                b_type_ptx=self.b_type_ptx,
             )
 
     def dpa(
@@ -112,7 +112,9 @@ class WGMMA(isa_wgmma.WGMMA):
             rho = "RNE-FP16" if self.d_type == torch.float16 else "RZ-FP32"
         L_max = 32 // self.a_type.itemsize
         e_zero = -21 if self.c_type == torch.float16 else -133
-        self.arithmetic_op = fdpa.MMA_T_FDPA(F, rho, L_max, e_zero)
+        self.arithmetic_op = fdpa.MMA_T_FDPA(
+            F, rho, L_max, e_zero, self.a_type_ptx, self.b_type_ptx
+        )
 
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
         return self.arithmetic_op.dpa(a, b, c)
@@ -134,7 +136,7 @@ class TCGen05MMA(isa_tcgen05mma.TCGen05MMA):
         L_max = 32 // self.a_type.itemsize
         e_zero = -21 if self.c_type == torch.float16 else -133
         self.arithmetic_op = fdpa.MMA_T_FDPA(
-            F, rho, L_max, e_zero, self.a_ptx_type, self.b_ptx_type
+            F, rho, L_max, e_zero, self.a_type_ptx, self.b_type_ptx
         )
 
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
@@ -162,8 +164,8 @@ class TCGen05MMABlockScale(isa_tcgen05mma.TCGen05MMABlockScale):
                 rho="RZ-FP32",
                 L_max=32,
                 e_zero=-133,
-                a_ptx_type=self.a_ptx_type,
-                b_ptx_type=self.b_ptx_type,
+                a_type_ptx=self.a_type_ptx,
+                b_type_ptx=self.b_type_ptx,
             )
 
     def dpa(
