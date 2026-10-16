@@ -11,8 +11,8 @@ dtype_subnormal_exponent = {
     torch.float8_e5m2fnuz: -15,
     torch.float8_e4m3fnuz: -7,
 }
-uint8_subnormal_exponent = {"e3m2": -2, "e2m3": 0, "e2m1": 0}
-uint8_type_bits = {"e3m2": (3, 2), "e2m3": (2, 3), "e2m1": (2, 1)}  # (E, M)
+fp6_fp4_subnormal_exponent = {"e3m2": -2, "e2m3": 0, "e2m1": 0}
+fp6_fp4_bits = {"e3m2": (3, 2), "e2m3": (2, 3), "e2m1": (2, 1)}  # (E, M)
 
 
 fp4_value_table = torch.tensor(
@@ -61,7 +61,7 @@ def unpack_uint8_to_fp4(x: torch.Tensor) -> torch.Tensor:
 
 def decode_uint8_to_fp6_fp4(x: torch.Tensor, x_type: str) -> torch.Tensor:
     assert x.dtype == torch.uint8
-    E, M = uint8_type_bits[x_type]
+    E, M = fp6_fp4_bits[x_type]
     x = (x.int() & 0x3F) >> (5 - E - M)  # fp6 sits in bits 5:0, fp4 in bits 5:2
     bias = 2 ** (E - 1) - 1
     e = (x >> M) & (2**E - 1)
