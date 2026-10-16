@@ -10,6 +10,8 @@ nv_torch_dtype = {
     "e5m2": torch.float8_e5m2,
     "ue8m0": torch.float8_e8m0fnu,
     "ue4m3": torch.float8_e4m3fn,
+    "e3m2": torch.uint8,  # torch has no fp6 dtype
+    "e2m3": torch.uint8,  # torch has no fp6 dtype
     "e2m1": torch.uint8,  # torch.float4_e2m1fn_x2 is not well-implemented
 }
 

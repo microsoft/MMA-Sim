@@ -52,7 +52,7 @@ Supported GPU architectures: `Volta`, `Turing`, `Ampere`, `Ada Lovelace`, `Hoppe
 
 Supported MMA instructions: `mma.sync`, `wgmma.mma_async`, `tcgen05.mma`, and `v_mfma`.
 
-Supported data types: FP64, FP32, TF32, FP16, BF16, FP8, FP4, MXFP8, MXFP4, and NVFP4.
+Supported data types: FP64, FP32, TF32, FP16, BF16, FP8, FP6, FP4, MXFP8, MXFP6, MXFP4, and NVFP4.
 
 ## How to verify the equivalence between MMA-Sim and GPU
 

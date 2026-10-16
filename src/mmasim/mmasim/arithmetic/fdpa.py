@@ -3,9 +3,11 @@ from typing import Annotated
 from .. import MMAOperation, MMABlockScaleOperation
 from .helper import (
     dtype_subnormal_exponent,
+    uint8_subnormal_exponent,
     truncate_fp32_to_tf32,
     truncate_e4m3_to_ue4m3,
     unpack_uint8_to_fp4,
+    decode_uint8_to_fp6_fp4,
 )
 
 DoubleTensor = Annotated[torch.Tensor, "float64"]
@@ -48,7 +50,7 @@ def ldexp_and_normalize(s: DoubleTensor, e: IntTensor, rho: str) -> torch.Tensor
         # as PyTorch-CPU computes FP64 -> FP32 -> FP16 internally
         s, e = frexp_and_normalize(s * pow2(e), e_subnormal=-14)
         s = torch.round(s * 2.0**10) * 2.0**-10  # RNE
-        res = (s * pow2(e)).to(torch.float16)
+        res = (s * pow2(e) + 0.0).to(torch.float16)  # -0.0 + 0.0 = +0.0
     elif rho == "RNE-FP32":
         res = (s * pow2(e)).to(torch.float32)
     else:  # RZ
@@ -57,7 +59,7 @@ def ldexp_and_normalize(s: DoubleTensor, e: IntTensor, rho: str) -> torch.Tensor
             s = torch.trunc(s * 2.0**13) * 2.0**-13  # RZ
         else:  # "RZ-FP32"
             s = torch.trunc(s * 2.0**23) * 2.0**-23  # RZ
-        res = (s * pow2(e)).to(torch.float32)
+        res = (s * pow2(e) + 0.0).to(torch.float32)  # -0.0 + 0.0 = +0.0
     nans = res.isnan()
     if res.dtype == torch.float16:
         res = res.view(torch.int16)
@@ -87,9 +89,11 @@ def t_fdpa(
     F: int,
     rho: str,
     e_zero: int,
+    e_subnormal_a: int | None = None,
+    e_subnormal_b: int | None = None,
 ) -> torch.Tensor:  # [...]
-    s_a, e_a = frexp_and_normalize(a)
-    s_b, e_b = frexp_and_normalize(b)
+    s_a, e_a = frexp_and_normalize(a, e_subnormal_a)
+    s_b, e_b = frexp_and_normalize(b, e_subnormal_b)
     s_c, e_c = frexp_and_normalize(c)
     s = torch.cat([s_a * s_b, s_c.unsqueeze(-1)], dim=-1)
     e = torch.cat([e_a + e_b, e_c.unsqueeze(-1)], dim=-1)
@@ -99,21 +103,45 @@ def t_fdpa(
 
 
 class MMA_T_FDPA(MMAOperation):
-    def __init__(self, F: int, rho: str, L_max: int, e_zero: int):
+    def __init__(
+        self,
+        F: int,
+        rho: str,
+        L_max: int,
+        e_zero: int,
+        a_ptx_type: str | None = None,
+        b_ptx_type: str | None = None,
+    ):
         self.F = F
         self.rho = rho
         self.L_max = L_max
         self.e_zero = e_zero
+        # fp6 and fp4 operands are held one per uint8, so keep their ptx types
+        self.a_ptx_type = a_ptx_type
+        self.b_ptx_type = b_ptx_type
+        self.e_subnormal_a = uint8_subnormal_exponent.get(a_ptx_type)
+        self.e_subnormal_b = uint8_subnormal_exponent.get(b_ptx_type)
 
     def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
         if a.dtype == torch.float32:  # tf32
             a = truncate_fp32_to_tf32(a)
             b = truncate_fp32_to_tf32(b)
+        if a.dtype == torch.uint8:  # fp6 or fp4
+            a = decode_uint8_to_fp6_fp4(a, self.a_ptx_type)
+        if b.dtype == torch.uint8:
+            b = decode_uint8_to_fp6_fp4(b, self.b_ptx_type)
         K = a.shape[-1]
         L = min(K, self.L_max)
         for i in range(0, K, L):
             c = t_fdpa(
-                a[..., i : i + L], b[..., i : i + L], c, self.F, self.rho, self.e_zero
+                a[..., i : i + L],
+                b[..., i : i + L],
+                c,
+                self.F,
+                self.rho,
+                self.e_zero,
+                self.e_subnormal_a,
+                self.e_subnormal_b,
             )
         return c
 
@@ -135,9 +163,11 @@ def st_fdpa(
     F: int,
     rho: str,
     e_zero: int,
+    e_subnormal_a: int | None = None,
+    e_subnormal_b: int | None = None,
 ) -> torch.Tensor:  # [...]
-    s_a, e_a = frexp_and_normalize(a)
-    s_b, e_b = frexp_and_normalize(b)
+    s_a, e_a = frexp_and_normalize(a, e_subnormal_a)
+    s_b, e_b = frexp_and_normalize(b, e_subnormal_b)
     s_c, e_c = frexp_and_normalize(c)
     s_alpha, e_alpha = frexp_and_normalize(alpha)
     s_beta, e_beta = frexp_and_normalize(beta)
@@ -150,11 +180,24 @@ def st_fdpa(
 
 
 class MMA_ST_FDPA(MMABlockScaleOperation):
-    def __init__(self, F: int, rho: str, L_max: int, e_zero: int):
+    def __init__(
+        self,
+        F: int,
+        rho: str,
+        L_max: int,
+        e_zero: int,
+        a_ptx_type: str | None = None,
+        b_ptx_type: str | None = None,
+    ):
         self.F = F
         self.rho = rho
         self.L_max = L_max
         self.e_zero = e_zero
+        # fp6 and fp4 operands are held one per uint8, so keep their ptx types
+        self.a_ptx_type = a_ptx_type
+        self.b_ptx_type = b_ptx_type
+        self.e_subnormal_a = uint8_subnormal_exponent.get(a_ptx_type)
+        self.e_subnormal_b = uint8_subnormal_exponent.get(b_ptx_type)
 
     def dpa(
         self,
@@ -164,6 +207,10 @@ class MMA_ST_FDPA(MMABlockScaleOperation):
         alpha: torch.Tensor,
         beta: torch.Tensor,
     ) -> torch.Tensor:
+        if a.dtype == torch.uint8:  # fp6 or fp4
+            a = decode_uint8_to_fp6_fp4(a, self.a_ptx_type)
+        if b.dtype == torch.uint8:
+            b = decode_uint8_to_fp6_fp4(b, self.b_ptx_type)
         K = a.shape[-1]
         L = min(K, self.L_max)
         for i in range(0, K, L):
@@ -176,6 +223,8 @@ class MMA_ST_FDPA(MMABlockScaleOperation):
                 self.F,
                 self.rho,
                 self.e_zero,
+                self.e_subnormal_a,
+                self.e_subnormal_b,
             )
         return c
 
