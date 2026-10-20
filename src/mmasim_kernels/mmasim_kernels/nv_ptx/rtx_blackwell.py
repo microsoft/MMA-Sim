@@ -2,6 +2,10 @@ import ctypes
 from pathlib import Path
 
 from torch.utils.cpp_extension import load
+from mmasim.nv_ptx.isa_mma import (
+    rtx_blackwell_mma_shape_and_type,
+    rtx_blackwell_mma_block_scale_shape_and_type,
+)
 from . import MMA, MMABlockScale
 
 dir = Path(__file__).with_name("kernels")
@@ -15,103 +19,33 @@ kernel_path = load(
     is_python_module=False,
 )
 lib = ctypes.CDLL(kernel_path)
+lib.mmasim_cuda_version.argtypes = []
+lib.mmasim_cuda_version.restype = ctypes.c_int
 
-# sm_89 fp8 m16n8k32 f32_output
-lib.mma_m16n8k32_f32_e5m2_e5m2_f32.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k32_f32_e5m2_e4m3_f32.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k32_f32_e4m3_e5m2_f32.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k32_f32_e4m3_e4m3_f32.argtypes = [ctypes.c_void_p] * 4
-# sm_89 fp8 m16n8k16 f32_output
-lib.mma_m16n8k16_f32_e5m2_e5m2_f32.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k16_f32_e5m2_e4m3_f32.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k16_f32_e4m3_e5m2_f32.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k16_f32_e4m3_e4m3_f32.argtypes = [ctypes.c_void_p] * 4
-# sm_89 fp8 m16n8k32 f16_output
-lib.mma_m16n8k32_f16_e5m2_e5m2_f16.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k32_f16_e5m2_e4m3_f16.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k32_f16_e4m3_e5m2_f16.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k32_f16_e4m3_e4m3_f16.argtypes = [ctypes.c_void_p] * 4
-# sm_89 fp8 m16n8k16 f16_output
-lib.mma_m16n8k16_f16_e5m2_e5m2_f16.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k16_f16_e5m2_e4m3_f16.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k16_f16_e4m3_e5m2_f16.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k16_f16_e4m3_e4m3_f16.argtypes = [ctypes.c_void_p] * 4
-# sm_80 f64
-lib.mma_m8n8k4_f64_f64_f64_f64.argtypes = [ctypes.c_void_p] * 4
-# sm_80 tf32
-lib.mma_m16n8k8_f32_tf32_tf32_f32.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k4_f32_tf32_tf32_f32.argtypes = [ctypes.c_void_p] * 4
-# sm_80 f16
-lib.mma_m16n8k16_f32_f16_f16_f32.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k16_f16_f16_f16_f16.argtypes = [ctypes.c_void_p] * 4
-# sm_80 bf16
-lib.mma_m16n8k16_f32_bf16_bf16_f32.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k8_f32_bf16_bf16_f32.argtypes = [ctypes.c_void_p] * 4
-# sm_75 f16
-lib.mma_m16n8k8_f32_f16_f16_f32.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k8_f16_f16_f16_f16.argtypes = [ctypes.c_void_p] * 4
-
-# sm_120a mxf8f6f4
-lib.mma_m16n8k32_block32_f32_e5m2_e5m2_f32_ue8m0.argtypes = [ctypes.c_void_p] * 6
-lib.mma_m16n8k32_block32_f32_e4m3_e4m3_f32_ue8m0.argtypes = [ctypes.c_void_p] * 6
-# sm_120a mxf4 and nvf4
-lib.mma_m16n8k64_block32_f32_e2m1_e2m1_f32_ue8m0.argtypes = [ctypes.c_void_p] * 6
-lib.mma_m16n8k64_block16_f32_e2m1_e2m1_f32_ue4m3.argtypes = [ctypes.c_void_p] * 6
-
-mma_cuda_kernels = {
-    # sm_89 fp8 m16n8k32 f32_output
-    "m16n8k32.f32.e5m2.e5m2.f32": lib.mma_m16n8k32_f32_e5m2_e5m2_f32,
-    "m16n8k32.f32.e5m2.e4m3.f32": lib.mma_m16n8k32_f32_e5m2_e4m3_f32,
-    "m16n8k32.f32.e4m3.e5m2.f32": lib.mma_m16n8k32_f32_e4m3_e5m2_f32,
-    "m16n8k32.f32.e4m3.e4m3.f32": lib.mma_m16n8k32_f32_e4m3_e4m3_f32,
-    # sm_89 fp8 m16n8k16 f32_output
-    "m16n8k16.f32.e5m2.e5m2.f32": lib.mma_m16n8k16_f32_e5m2_e5m2_f32,
-    "m16n8k16.f32.e5m2.e4m3.f32": lib.mma_m16n8k16_f32_e5m2_e4m3_f32,
-    "m16n8k16.f32.e4m3.e5m2.f32": lib.mma_m16n8k16_f32_e4m3_e5m2_f32,
-    "m16n8k16.f32.e4m3.e4m3.f32": lib.mma_m16n8k16_f32_e4m3_e4m3_f32,
-    # sm_89 fp8 m16n8k32 f16_output
-    "m16n8k32.f16.e5m2.e5m2.f16": lib.mma_m16n8k32_f16_e5m2_e5m2_f16,
-    "m16n8k32.f16.e5m2.e4m3.f16": lib.mma_m16n8k32_f16_e5m2_e4m3_f16,
-    "m16n8k32.f16.e4m3.e5m2.f16": lib.mma_m16n8k32_f16_e4m3_e5m2_f16,
-    "m16n8k32.f16.e4m3.e4m3.f16": lib.mma_m16n8k32_f16_e4m3_e4m3_f16,
-    # sm_89 fp8 m16n8k16 f16_output
-    "m16n8k16.f16.e5m2.e5m2.f16": lib.mma_m16n8k16_f16_e5m2_e5m2_f16,
-    "m16n8k16.f16.e5m2.e4m3.f16": lib.mma_m16n8k16_f16_e5m2_e4m3_f16,
-    "m16n8k16.f16.e4m3.e5m2.f16": lib.mma_m16n8k16_f16_e4m3_e5m2_f16,
-    "m16n8k16.f16.e4m3.e4m3.f16": lib.mma_m16n8k16_f16_e4m3_e4m3_f16,
-    # sm_80 f64
-    "m8n8k4.f64.f64.f64.f64": lib.mma_m8n8k4_f64_f64_f64_f64,
-    # sm_80 tf32
-    "m16n8k8.f32.tf32.tf32.f32": lib.mma_m16n8k8_f32_tf32_tf32_f32,
-    "m16n8k4.f32.tf32.tf32.f32": lib.mma_m16n8k4_f32_tf32_tf32_f32,
-    # sm_80 f16
-    "m16n8k16.f32.f16.f16.f32": lib.mma_m16n8k16_f32_f16_f16_f32,
-    "m16n8k16.f16.f16.f16.f16": lib.mma_m16n8k16_f16_f16_f16_f16,
-    # sm_80 bf16
-    "m16n8k16.f32.bf16.bf16.f32": lib.mma_m16n8k16_f32_bf16_bf16_f32,
-    "m16n8k8.f32.bf16.bf16.f32": lib.mma_m16n8k8_f32_bf16_bf16_f32,
-    # sm_75 f16
-    "m16n8k8.f32.f16.f16.f32": lib.mma_m16n8k8_f32_f16_f16_f32,
-    "m16n8k8.f16.f16.f16.f16": lib.mma_m16n8k8_f16_f16_f16_f16,
-}
-mma_block_scale_cuda_kernels = {
-    # sm_120a mxf8f6f4
-    "m16n8k32.block32.f32.e5m2.e5m2.f32.ue8m0": lib.mma_m16n8k32_block32_f32_e5m2_e5m2_f32_ue8m0,
-    "m16n8k32.block32.f32.e4m3.e4m3.f32.ue8m0": lib.mma_m16n8k32_block32_f32_e4m3_e4m3_f32_ue8m0,
-    # sm_120a mxf4 and nvf4
-    "m16n8k64.block32.f32.e2m1.e2m1.f32.ue8m0": lib.mma_m16n8k64_block32_f32_e2m1_e2m1_f32_ue8m0,
-    "m16n8k64.block16.f32.e2m1.e2m1.f32.ue4m3": lib.mma_m16n8k64_block16_f32_e2m1_e2m1_f32_ue4m3,
-}
-
-mma_kernels = {
-    shape_and_type: MMA(
-        "RTX Blackwell", shape_and_type, mma_cuda_kernels[shape_and_type]
+mma_kernels = {}
+for shape_and_type in rtx_blackwell_mma_shape_and_type:
+    kernel = lib.__getattr__(
+        f"mma_{shape_and_type.replace('.', '_').replace('::', '_')}"
     )
-    for shape_and_type in mma_cuda_kernels
-}
-mma_block_scale_kernels = {
-    shape_and_type: MMABlockScale(
-        "RTX Blackwell", shape_and_type, mma_block_scale_cuda_kernels[shape_and_type]
+    kernel.argtypes = [ctypes.c_void_p] * 4
+    mma_kernels[shape_and_type] = MMA("RTX Blackwell", shape_and_type, kernel)
+
+mma_block_scale_kernels = {}
+unavailable_mma_block_scale_kernels = {}
+for shape_and_type in rtx_blackwell_mma_block_scale_shape_and_type:
+    # PTX ISA 9.1 introduced UE8M0 with scale_vec::4X for this instruction.
+    if (
+        shape_and_type == "m16n8k64.kind::mxf4nvf4.block16.f32.e2m1.e2m1.f32.ue8m0"
+        and lib.mmasim_cuda_version() < 13010
+    ):
+        unavailable_mma_block_scale_kernels[shape_and_type] = (
+            "requires PTX ISA 9.1 / CUDA 13.1+"
+        )
+        continue
+    kernel = lib.__getattr__(
+        f"mma_{shape_and_type.replace('.', '_').replace('::', '_')}"
     )
-    for shape_and_type in mma_block_scale_cuda_kernels
-}
+    kernel.argtypes = [ctypes.c_void_p] * 6
+    mma_block_scale_kernels[shape_and_type] = MMABlockScale(
+        "RTX Blackwell", shape_and_type, kernel
+    )

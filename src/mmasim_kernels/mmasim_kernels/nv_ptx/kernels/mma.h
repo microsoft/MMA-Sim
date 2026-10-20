@@ -107,6 +107,23 @@
         }                                                       \
     } while (0)
 
+// Nonzero low FP4 padding bits can be consumed as additional mantissa bits by the hardware.
+#define F8F6F4_MASK_e5m2 0xffffffffu
+#define F8F6F4_MASK_e4m3 0xffffffffu
+#define F8F6F4_MASK_e3m2 0x3f3f3f3fu
+#define F8F6F4_MASK_e2m3 0x3f3f3f3fu
+#define F8F6F4_MASK_e2m1 0x3c3c3c3cu
+
+#define LOAD_A_M16K32_F8F6F4(mask)       \
+    do                                   \
+    {                                    \
+        LOAD_A_M16K32_FP8();             \
+        for (uint32_t i = 0; i < 4; i++) \
+        {                                \
+            a_frag[i] &= (mask);         \
+        }                                \
+    } while (0)
+
 #define LOAD_A_M16K16_FP8()                                   \
     do                                                        \
     {                                                         \
@@ -217,6 +234,16 @@
             uint32_t col = laneid / 4;                          \
             b_frag[i / 4] = *(uint32_t *)(b + col * K + row);   \
         }                                                       \
+    } while (0)
+
+#define LOAD_B_N8K32_F8F6F4(mask)        \
+    do                                   \
+    {                                    \
+        LOAD_B_N8K32_FP8();              \
+        for (uint32_t i = 0; i < 2; i++) \
+        {                                \
+            b_frag[i] &= (mask);         \
+        }                                \
     } while (0)
 
 #define LOAD_B_N8K16_FP8()                            \

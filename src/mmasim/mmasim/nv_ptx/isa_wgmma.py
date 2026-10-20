@@ -1,32 +1,39 @@
 from .. import MMAOperation
 from .isa_common import nv_torch_dtype, nv_shape_to_mnk
 
+_wgmma_n = list(range(8, 257, 8))
+hopper_wgmma_shape_and_type = (
+    [f"m64n{n}k8.f32.tf32.tf32" for n in _wgmma_n]
+    + [f"m64n{n}k16.f32.f16.f16" for n in _wgmma_n]
+    + [f"m64n{n}k16.f16.f16.f16" for n in _wgmma_n]
+    + [f"m64n{n}k16.f32.bf16.bf16" for n in _wgmma_n]
+    + [
+        f"m64n{n}k32.{d_type}.{a_type}.{b_type}"
+        for n in _wgmma_n
+        for d_type in ("f32", "f16")
+        for a_type in ("e5m2", "e4m3")
+        for b_type in ("e5m2", "e4m3")
+    ]
+)
+wgmma_shape_and_type = {
+    "Hopper": hopper_wgmma_shape_and_type,
+}
+
 
 class WGMMA(MMAOperation):
     def __init__(self, arch: str, shape_and_type: str):
-        assert arch == "Hopper"
-        qualifiers = shape_and_type.split(".")
-        assert len(qualifiers) == 4
-        shape, d_type, a_type, b_type = qualifiers
+        assert arch in wgmma_shape_and_type, (
+            f"Unsupported architecture {arch} for wgmma.\n"
+            f"Supported architectures: {list(wgmma_shape_and_type.keys())}"
+        )
+        supported_shape_and_type = wgmma_shape_and_type[arch]
+        assert shape_and_type in supported_shape_and_type, (
+            f"Unsupported shape_and_type {shape_and_type} for wgmma on {arch} architecture.\n"
+            "Supported shape_and_type format: m{m}n{n}k{k}.{d_type}.{a_type}.{b_type}\n"
+            "Refer to the PTX documentation for valid combinations."
+        )
+        shape, d_type, a_type, b_type = shape_and_type.split(".")
         m, n, k = nv_shape_to_mnk(shape)
-        assert m == 64
-        assert n in list(range(8, 256 + 1, 8))
-        assert k in [8, 16, 32]
-        if k == 8:
-            assert a_type == b_type == "tf32"
-            assert d_type == "f32"
-        elif k == 16:
-            assert a_type in ["f16", "bf16"]
-            if a_type == "f16":
-                assert b_type == "f16"
-                assert d_type in ["f32", "f16"]
-            else:  # a_type == "bf16"
-                assert b_type == "bf16"
-                assert d_type == "f32"
-        else:  # k == 32
-            assert a_type in ["e5m2", "e4m3"]
-            assert b_type in ["e5m2", "e4m3"]
-            assert d_type in ["f32", "f16"]
         self.arch = arch
         self.shape_and_type = shape_and_type
         self.m, self.n, self.k = m, n, k

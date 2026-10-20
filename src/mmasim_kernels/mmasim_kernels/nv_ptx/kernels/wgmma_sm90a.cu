@@ -1,380 +1,81 @@
 #include "wgmma.h"
 
-extern "C" // tf32
+// One full m64nNkK instruction per kernel, including the complete N-column
+// accumulator. The matrix is never decomposed into smaller WGMMA shapes.
+template <int N, WGMMAType DType, WGMMAType AType, WGMMAType BType>
+__global__ void wgmma_kernel(typename WGMMAAccumulator<DType>::Element *d,
+                             const void *a, const void *b)
 {
-    __global__ void wgmma_m64n8k8_f32_tf32_tf32_kernel(
-        float *d, uint32_t *a, uint32_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 8;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint64_t a_desc, b_desc;
-        __shared__ uint32_t a_smem[M * K], b_smem[N * K];
-        float d_frag[4];
+    using Accumulator = WGMMAAccumulator<DType>;
+    constexpr int registers = N / 8 * Accumulator::registers_per_8_columns;
+    typename Accumulator::Register d_frag[registers];
+    uint32_t tid = threadIdx.x;
+    __shared__ __align__(16) uint8_t a_smem[64 * 32], b_smem[N * 32];
 
-        LOAD_A_M64K8_TF32();
-        LOAD_B_N8K8_TF32();
-        LOAD_D_M64N8_F32();
-        __syncthreads();
-        asm volatile("wgmma.fence.sync.aligned;");
-        asm volatile(
-            "wgmma.mma_async.sync.aligned.m64n8k8.f32.tf32.tf32 "
-            "{%0, %1, %2, %3}, %4, %5, 1, 1, 1;"
-            : "+f"(d_frag[0]), "+f"(d_frag[1]), "+f"(d_frag[2]), "+f"(d_frag[3])
-            : "l"(a_desc), "l"(b_desc));
-        asm volatile("wgmma.commit_group.sync.aligned;");
-        asm volatile("wgmma.wait_group.sync.aligned 0;");
-        STORE_D_M64N8_F32();
-    }
+    uint64_t a_desc = wgmma_pack_operand(a_smem, a, 64, tid);
+    uint64_t b_desc = wgmma_pack_operand(b_smem, b, N, tid);
+    wgmma_transfer_d<N, false>(d, d_frag, tid);
+    asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
+    __syncthreads();
 
-    void wgmma_m64n8k8_f32_tf32_tf32(
-        float *d, uint32_t *a, uint32_t *b)
-    {
-        wgmma_m64n8k8_f32_tf32_tf32_kernel<<<1, 128>>>(d, a, b);
-    }
+    asm volatile("wgmma.fence.sync.aligned;" ::: "memory");
+    WGMMAInstruction<N, DType, AType, BType>::run(d_frag, a_desc, b_desc);
+    asm volatile("wgmma.commit_group.sync.aligned;" ::: "memory");
+    asm volatile("wgmma.wait_group.sync.aligned 0;" ::: "memory");
+    wgmma_transfer_d<N, true>(d, d_frag, tid);
 }
 
-extern "C" // f16
-{
-    __global__ void wgmma_m64n8k16_f32_f16_f16_kernel(
-        float *d, uint16_t *a, uint16_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 16;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint64_t a_desc, b_desc;
-        __shared__ uint16_t a_smem[M * K], b_smem[N * K];
-        float d_frag[4];
-
-        LOAD_A_M64K16_F16BF16();
-        LOAD_B_N8K16_F16BF16();
-        LOAD_D_M64N8_F32();
-        __syncthreads();
-        asm volatile("wgmma.fence.sync.aligned;");
-        asm volatile(
-            "wgmma.mma_async.sync.aligned.m64n8k16.f32.f16.f16 "
-            "{%0, %1, %2, %3}, %4, %5, 1, 1, 1, 0, 0;"
-            : "+f"(d_frag[0]), "+f"(d_frag[1]), "+f"(d_frag[2]), "+f"(d_frag[3])
-            : "l"(a_desc), "l"(b_desc));
-        asm volatile("wgmma.commit_group.sync.aligned;");
-        asm volatile("wgmma.wait_group.sync.aligned 0;");
-        STORE_D_M64N8_F32();
-    }
-
-    __global__ void wgmma_m64n8k16_f16_f16_f16_kernel(
-        uint16_t *d, uint16_t *a, uint16_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 16;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint64_t a_desc, b_desc;
-        __shared__ uint16_t a_smem[M * K], b_smem[N * K];
-        uint32_t d_frag[2];
-
-        LOAD_A_M64K16_F16BF16();
-        LOAD_B_N8K16_F16BF16();
-        LOAD_D_M64N8_F16();
-        __syncthreads();
-        asm volatile("wgmma.fence.sync.aligned;");
-        asm volatile(
-            "wgmma.mma_async.sync.aligned.m64n8k16.f16.f16.f16 "
-            "{%0, %1}, %2, %3, 1, 1, 1, 0, 0;"
-            : "+r"(d_frag[0]), "+r"(d_frag[1])
-            : "l"(a_desc), "l"(b_desc));
-        asm volatile("wgmma.commit_group.sync.aligned;");
-        asm volatile("wgmma.wait_group.sync.aligned 0;");
-        STORE_D_M64N8_F16();
-    }
-
-    void wgmma_m64n8k16_f32_f16_f16(
-        float *d, uint16_t *a, uint16_t *b)
-    {
-        wgmma_m64n8k16_f32_f16_f16_kernel<<<1, 128>>>(d, a, b);
-    }
-
-    void wgmma_m64n8k16_f16_f16_f16(
-        uint16_t *d, uint16_t *a, uint16_t *b)
-    {
-        wgmma_m64n8k16_f16_f16_f16_kernel<<<1, 128>>>(d, a, b);
-    }
+#define DEFINE_WGMMA(n, ksize, dtype, atype, btype) \
+extern "C" void wgmma_m64n##n##k##ksize##_##dtype##_##atype##_##btype( \
+    WGMMAAccumulator<WGMMAType::dtype>::Element *d, void *a, void *b) \
+{ \
+    wgmma_kernel<n, WGMMAType::dtype, WGMMAType::atype, WGMMAType::btype> \
+        <<<1, 128>>>(d, a, b); \
 }
 
-extern "C" // bf16
-{
-    __global__ void wgmma_m64n8k16_f32_bf16_bf16_kernel(
-        float *d, uint16_t *a, uint16_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 16;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint64_t a_desc, b_desc;
-        __shared__ uint16_t a_smem[M * K], b_smem[N * K];
-        float d_frag[4];
+#define DEFINE_WGMMA_SHAPE(n) \
+    DEFINE_WGMMA(n, 8, f32, tf32, tf32) \
+    DEFINE_WGMMA(n, 16, f32, f16, f16) \
+    DEFINE_WGMMA(n, 16, f16, f16, f16) \
+    DEFINE_WGMMA(n, 16, f32, bf16, bf16) \
+    DEFINE_WGMMA(n, 32, f32, e5m2, e5m2) \
+    DEFINE_WGMMA(n, 32, f32, e5m2, e4m3) \
+    DEFINE_WGMMA(n, 32, f32, e4m3, e5m2) \
+    DEFINE_WGMMA(n, 32, f32, e4m3, e4m3) \
+    DEFINE_WGMMA(n, 32, f16, e5m2, e5m2) \
+    DEFINE_WGMMA(n, 32, f16, e5m2, e4m3) \
+    DEFINE_WGMMA(n, 32, f16, e4m3, e5m2) \
+    DEFINE_WGMMA(n, 32, f16, e4m3, e4m3)
 
-        LOAD_A_M64K16_F16BF16();
-        LOAD_B_N8K16_F16BF16();
-        LOAD_D_M64N8_F32();
-        __syncthreads();
-        asm volatile("wgmma.fence.sync.aligned;");
-        asm volatile(
-            "wgmma.mma_async.sync.aligned.m64n8k16.f32.bf16.bf16 "
-            "{%0, %1, %2, %3}, %4, %5, 1, 1, 1, 0, 0;"
-            : "+f"(d_frag[0]), "+f"(d_frag[1]), "+f"(d_frag[2]), "+f"(d_frag[3])
-            : "l"(a_desc), "l"(b_desc));
-        asm volatile("wgmma.commit_group.sync.aligned;");
-        asm volatile("wgmma.wait_group.sync.aligned 0;");
-        STORE_D_M64N8_F32();
-    }
-
-    void wgmma_m64n8k16_f32_bf16_bf16(
-        float *d, uint16_t *a, uint16_t *b)
-    {
-        wgmma_m64n8k16_f32_bf16_bf16_kernel<<<1, 128>>>(d, a, b);
-    }
-}
-
-extern "C" // fp8 m64n8k32 f32_output
-{
-
-    __global__ void wgmma_m64n8k32_f32_e5m2_e5m2_kernel(
-        float *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        float d_frag[4];
-
-        LOAD_A_M64K32_FP8();
-        LOAD_B_N8K32_FP8();
-        LOAD_D_M64N8_F32();
-        __syncthreads();
-        asm volatile("wgmma.fence.sync.aligned;");
-        asm volatile(
-            "wgmma.mma_async.sync.aligned.m64n8k32.f32.e5m2.e5m2 "
-            "{%0, %1, %2, %3}, %4, %5, 1, 1, 1;"
-            : "+f"(d_frag[0]), "+f"(d_frag[1]), "+f"(d_frag[2]), "+f"(d_frag[3])
-            : "l"(a_desc), "l"(b_desc));
-        asm volatile("wgmma.commit_group.sync.aligned;");
-        asm volatile("wgmma.wait_group.sync.aligned 0;");
-        STORE_D_M64N8_F32();
-    }
-
-    __global__ void wgmma_m64n8k32_f32_e5m2_e4m3_kernel(
-        float *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        float d_frag[4];
-
-        LOAD_A_M64K32_FP8();
-        LOAD_B_N8K32_FP8();
-        LOAD_D_M64N8_F32();
-        __syncthreads();
-        asm volatile("wgmma.fence.sync.aligned;");
-        asm volatile(
-            "wgmma.mma_async.sync.aligned.m64n8k32.f32.e5m2.e4m3 "
-            "{%0, %1, %2, %3}, %4, %5, 1, 1, 1;"
-            : "+f"(d_frag[0]), "+f"(d_frag[1]), "+f"(d_frag[2]), "+f"(d_frag[3])
-            : "l"(a_desc), "l"(b_desc));
-        asm volatile("wgmma.commit_group.sync.aligned;");
-        asm volatile("wgmma.wait_group.sync.aligned 0;");
-        STORE_D_M64N8_F32();
-    }
-
-    __global__ void wgmma_m64n8k32_f32_e4m3_e5m2_kernel(
-        float *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        float d_frag[4];
-
-        LOAD_A_M64K32_FP8();
-        LOAD_B_N8K32_FP8();
-        LOAD_D_M64N8_F32();
-        __syncthreads();
-        // mma
-        __syncthreads();
-        asm volatile("wgmma.fence.sync.aligned;");
-        asm volatile(
-            "wgmma.mma_async.sync.aligned.m64n8k32.f32.e4m3.e5m2 "
-            "{%0, %1, %2, %3}, %4, %5, 1, 1, 1;"
-            : "+f"(d_frag[0]), "+f"(d_frag[1]), "+f"(d_frag[2]), "+f"(d_frag[3])
-            : "l"(a_desc), "l"(b_desc));
-        asm volatile("wgmma.commit_group.sync.aligned;");
-        asm volatile("wgmma.wait_group.sync.aligned 0;");
-        STORE_D_M64N8_F32();
-    }
-
-    __global__ void wgmma_m64n8k32_f32_e4m3_e4m3_kernel(
-        float *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        float d_frag[4];
-
-        LOAD_A_M64K32_FP8();
-        LOAD_B_N8K32_FP8();
-        LOAD_D_M64N8_F32();
-        __syncthreads();
-        __syncthreads();
-        asm volatile("wgmma.fence.sync.aligned;");
-        asm volatile(
-            "wgmma.mma_async.sync.aligned.m64n8k32.f32.e4m3.e4m3 "
-            "{%0, %1, %2, %3}, %4, %5, 1, 1, 1;"
-            : "+f"(d_frag[0]), "+f"(d_frag[1]), "+f"(d_frag[2]), "+f"(d_frag[3])
-            : "l"(a_desc), "l"(b_desc));
-        asm volatile("wgmma.commit_group.sync.aligned;");
-        asm volatile("wgmma.wait_group.sync.aligned 0;");
-        STORE_D_M64N8_F32();
-    }
-
-    void wgmma_m64n8k32_f32_e5m2_e5m2(
-        float *d, uint8_t *a, uint8_t *b)
-    {
-        wgmma_m64n8k32_f32_e5m2_e5m2_kernel<<<1, 128>>>(d, a, b);
-    }
-
-    void wgmma_m64n8k32_f32_e5m2_e4m3(
-        float *d, uint8_t *a, uint8_t *b)
-    {
-        wgmma_m64n8k32_f32_e5m2_e4m3_kernel<<<1, 128>>>(d, a, b);
-    }
-
-    void wgmma_m64n8k32_f32_e4m3_e5m2(
-        float *d, uint8_t *a, uint8_t *b)
-    {
-        wgmma_m64n8k32_f32_e4m3_e5m2_kernel<<<1, 128>>>(d, a, b);
-    }
-
-    void wgmma_m64n8k32_f32_e4m3_e4m3(
-        float *d, uint8_t *a, uint8_t *b)
-    {
-        wgmma_m64n8k32_f32_e4m3_e4m3_kernel<<<1, 128>>>(d, a, b);
-    }
-}
-
-extern "C" // fp8 m64n8k32 f16_output
-{
-    __global__ void wgmma_m64n8k32_f16_e5m2_e5m2_kernel(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        uint32_t d_frag[2];
-
-        LOAD_A_M64K32_FP8();
-        LOAD_B_N8K32_FP8();
-        LOAD_D_M64N8_F16();
-        __syncthreads();
-        asm volatile("wgmma.fence.sync.aligned;");
-        asm volatile(
-            "wgmma.mma_async.sync.aligned.m64n8k32.f16.e5m2.e5m2 "
-            "{%0, %1}, %2, %3, 1, 1, 1;"
-            : "+r"(d_frag[0]), "+r"(d_frag[1])
-            : "l"(a_desc), "l"(b_desc));
-        asm volatile("wgmma.commit_group.sync.aligned;");
-        asm volatile("wgmma.wait_group.sync.aligned 0;");
-        STORE_D_M64N8_F16();
-    }
-
-    __global__ void wgmma_m64n8k32_f16_e5m2_e4m3_kernel(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        uint32_t d_frag[2];
-
-        LOAD_A_M64K32_FP8();
-        LOAD_B_N8K32_FP8();
-        LOAD_D_M64N8_F16();
-        __syncthreads();
-        asm volatile("wgmma.fence.sync.aligned;");
-        asm volatile(
-            "wgmma.mma_async.sync.aligned.m64n8k32.f16.e5m2.e4m3 "
-            "{%0, %1}, %2, %3, 1, 1, 1;"
-            : "+r"(d_frag[0]), "+r"(d_frag[1])
-            : "l"(a_desc), "l"(b_desc));
-        asm volatile("wgmma.commit_group.sync.aligned;");
-        asm volatile("wgmma.wait_group.sync.aligned 0;");
-        STORE_D_M64N8_F16();
-    }
-
-    __global__ void wgmma_m64n8k32_f16_e4m3_e5m2_kernel(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        uint32_t d_frag[2];
-
-        LOAD_A_M64K32_FP8();
-        LOAD_B_N8K32_FP8();
-        LOAD_D_M64N8_F16();
-        __syncthreads();
-        asm volatile("wgmma.fence.sync.aligned;");
-        asm volatile(
-            "wgmma.mma_async.sync.aligned.m64n8k32.f16.e4m3.e5m2 "
-            "{%0, %1}, %2, %3, 1, 1, 1;"
-            : "+r"(d_frag[0]), "+r"(d_frag[1])
-            : "l"(a_desc), "l"(b_desc));
-        asm volatile("wgmma.commit_group.sync.aligned;");
-        asm volatile("wgmma.wait_group.sync.aligned 0;");
-        STORE_D_M64N8_F16();
-    }
-
-    __global__ void wgmma_m64n8k32_f16_e4m3_e4m3_kernel(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        uint32_t d_frag[2];
-
-        LOAD_A_M64K32_FP8();
-        LOAD_B_N8K32_FP8();
-        LOAD_D_M64N8_F16();
-        __syncthreads();
-        asm volatile("wgmma.fence.sync.aligned;");
-        asm volatile(
-            "wgmma.mma_async.sync.aligned.m64n8k32.f16.e4m3.e4m3 "
-            "{%0, %1}, %2, %3, 1, 1, 1;"
-            : "+r"(d_frag[0]), "+r"(d_frag[1])
-            : "l"(a_desc), "l"(b_desc));
-        asm volatile("wgmma.commit_group.sync.aligned;");
-        asm volatile("wgmma.wait_group.sync.aligned 0;");
-        STORE_D_M64N8_F16();
-    }
-
-    void wgmma_m64n8k32_f16_e5m2_e5m2(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        wgmma_m64n8k32_f16_e5m2_e5m2_kernel<<<1, 128>>>(d, a, b);
-    }
-
-    void wgmma_m64n8k32_f16_e5m2_e4m3(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        wgmma_m64n8k32_f16_e5m2_e4m3_kernel<<<1, 128>>>(d, a, b);
-    }
-
-    void wgmma_m64n8k32_f16_e4m3_e5m2(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        wgmma_m64n8k32_f16_e4m3_e5m2_kernel<<<1, 128>>>(d, a, b);
-    }
-
-    void wgmma_m64n8k32_f16_e4m3_e4m3(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        wgmma_m64n8k32_f16_e4m3_e4m3_kernel<<<1, 128>>>(d, a, b);
-    }
-}
+DEFINE_WGMMA_SHAPE(8)
+DEFINE_WGMMA_SHAPE(16)
+DEFINE_WGMMA_SHAPE(24)
+DEFINE_WGMMA_SHAPE(32)
+DEFINE_WGMMA_SHAPE(40)
+DEFINE_WGMMA_SHAPE(48)
+DEFINE_WGMMA_SHAPE(56)
+DEFINE_WGMMA_SHAPE(64)
+DEFINE_WGMMA_SHAPE(72)
+DEFINE_WGMMA_SHAPE(80)
+DEFINE_WGMMA_SHAPE(88)
+DEFINE_WGMMA_SHAPE(96)
+DEFINE_WGMMA_SHAPE(104)
+DEFINE_WGMMA_SHAPE(112)
+DEFINE_WGMMA_SHAPE(120)
+DEFINE_WGMMA_SHAPE(128)
+DEFINE_WGMMA_SHAPE(136)
+DEFINE_WGMMA_SHAPE(144)
+DEFINE_WGMMA_SHAPE(152)
+DEFINE_WGMMA_SHAPE(160)
+DEFINE_WGMMA_SHAPE(168)
+DEFINE_WGMMA_SHAPE(176)
+DEFINE_WGMMA_SHAPE(184)
+DEFINE_WGMMA_SHAPE(192)
+DEFINE_WGMMA_SHAPE(200)
+DEFINE_WGMMA_SHAPE(208)
+DEFINE_WGMMA_SHAPE(216)
+DEFINE_WGMMA_SHAPE(224)
+DEFINE_WGMMA_SHAPE(232)
+DEFINE_WGMMA_SHAPE(240)
+DEFINE_WGMMA_SHAPE(248)
+DEFINE_WGMMA_SHAPE(256)

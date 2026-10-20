@@ -1,759 +1,150 @@
 #include "tcgen05mma.h"
 
-extern "C" // tf32
+template <TCGen05Kind Kind, TCGen05Type AType, TCGen05Type BType, typename D>
+__global__ void tcgen05mma_kernel(D *d, const void *a, const void *b, uint32_t M, uint32_t N)
 {
-    __global__ void tcgen05mma_m64n8k8_f32_tf32_tf32_kernel(
-        uint32_t *d, uint32_t *a, uint32_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 8;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint32_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr;
-        __shared__ uint64_t mma_barrier;
+    uint32_t tid = threadIdx.x;
+    uint32_t cols = tcgen05_tmem_columns(N);
+    __shared__ __align__(16) uint8_t a_smem[128 * 32], b_smem[256 * 32];
+    __shared__ uint32_t d_tmem_addr;
+    __shared__ uint64_t mma_barrier;
 
-        INIT_MBARRIER();
-        LOAD_A_M64K8_TF32();
-        LOAD_B_N8K8_TF32();
-        ALLOC_TMEM(d_tmem_addr);
-        __syncthreads();
-        LOAD_D_M64N8();
-        __syncthreads();
-        i_desc |= (1 << 4) | (2 << 7) | (2 << 10); // f32_tf32_tf32
-        MMA("tf32");
-        STORE_D_M64N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        RELINQUISH_TMEM();
-    }
+    tcgen05_init_barrier(mma_barrier);
+    tcgen05_pack_operand<Kind, AType>(a_smem, a, M, tid);
+    tcgen05_pack_operand<Kind, BType>(b_smem, b, N, tid);
+    uint64_t a_desc = tcgen05_smem_desc(a_smem);
+    uint64_t b_desc = tcgen05_smem_desc(b_smem);
+    tcgen05_alloc_tmem(d_tmem_addr, cols);
+    asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
+    __syncthreads();
 
-    void tcgen05mma_m64n8k8_f32_tf32_tf32(
-        uint32_t *d, uint32_t *a, uint32_t *b)
-    {
-        tcgen05mma_m64n8k8_f32_tf32_tf32_kernel<<<1, 128>>>(d, a, b);
-    }
+    tcgen05_transfer_d<D, false>(d, d_tmem_addr, M, N, tid);
+    asm volatile("tcgen05.fence::before_thread_sync;" ::: "memory");
+    __syncthreads();
+    asm volatile("tcgen05.fence::after_thread_sync;" ::: "memory");
+
+    constexpr uint32_t d_code = std::is_same<D, uint16_t>::value ? 0 : 1;
+    uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24) | (d_code << 4) | (tcgen05_type_code<Kind, AType>() << 7) | (tcgen05_type_code<Kind, BType>() << 10);
+    tcgen05_mma<Kind>(d_tmem_addr, a_desc, b_desc, i_desc);
+    tcgen05_commit_and_wait(mma_barrier);
+
+    asm volatile("tcgen05.fence::after_thread_sync;" ::: "memory");
+    tcgen05_transfer_d<D, true>(d, d_tmem_addr, M, N, tid);
+    asm volatile("tcgen05.fence::before_thread_sync;" ::: "memory");
+    __syncthreads();
+    tcgen05_dealloc_tmem(d_tmem_addr, cols);
+    tcgen05_relinquish_tmem();
 }
 
-extern "C" // f16 and bf16
+template <TCGen05Kind Kind, TCGen05Type AType, TCGen05Type BType,
+          int BlockSize, TCGen05ScaleType SType>
+__global__ void tcgen05mma_block_scale_kernel(uint32_t *d, const void *a, const void *b,
+                                              const uint8_t *sfa, const uint8_t *sfb,
+                                              uint32_t M, uint32_t N)
 {
-    __global__ void tcgen05mma_m64n8k16_f32_f16_f16_kernel(
-        uint32_t *d, uint16_t *a, uint16_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 16;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint16_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr;
-        __shared__ uint64_t mma_barrier;
+    constexpr int scale_vectors = Kind == TCGen05Kind::mxf8f6f4 ? 1 : 64 / BlockSize;
+    constexpr uint32_t scale_code = SType == TCGen05ScaleType::ue8m0 ? 1 : 0;
+    uint32_t tid = threadIdx.x;
+    uint32_t cols = tcgen05_tmem_columns(N);
+    __shared__ __align__(16) uint8_t a_smem[128 * 32], b_smem[256 * 32];
+    __shared__ uint32_t d_tmem_addr, sfa_tmem_addr, sfb_tmem_addr;
+    __shared__ uint64_t mma_barrier;
 
-        INIT_MBARRIER();
-        LOAD_A_M64K16_F16BF16();
-        LOAD_B_N8K16_F16BF16();
-        ALLOC_TMEM(d_tmem_addr);
-        __syncthreads();
-        LOAD_D_M64N8();
-        __syncthreads();
-        i_desc |= 1 << 4; // f32_f16_f16
-        MMA("f16");
-        STORE_D_M64N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        RELINQUISH_TMEM();
-    }
+    tcgen05_init_barrier(mma_barrier);
+    tcgen05_pack_operand<Kind, AType>(a_smem, a, M, tid);
+    tcgen05_pack_operand<Kind, BType>(b_smem, b, N, tid);
+    uint64_t a_desc = tcgen05_smem_desc(a_smem);
+    uint64_t b_desc = tcgen05_smem_desc(b_smem);
+    tcgen05_alloc_tmem(d_tmem_addr, cols);
+    tcgen05_alloc_tmem(sfa_tmem_addr, 32);
+    tcgen05_alloc_tmem(sfb_tmem_addr, 32);
+    asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
+    __syncthreads();
 
-    __global__ void tcgen05mma_m64n8k16_f32_bf16_bf16_kernel(
-        uint32_t *d, uint16_t *a, uint16_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 16;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint16_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr;
-        __shared__ uint64_t mma_barrier;
+    tcgen05_transfer_d<uint32_t, false>(d, d_tmem_addr, M, N, tid);
+    tcgen05_store_scales<scale_vectors>(sfa_tmem_addr, sfa, M, tid);
+    tcgen05_store_scales<scale_vectors>(sfb_tmem_addr, sfb, N, tid);
+    asm volatile("tcgen05.fence::before_thread_sync;" ::: "memory");
+    __syncthreads();
+    asm volatile("tcgen05.fence::after_thread_sync;" ::: "memory");
 
-        INIT_MBARRIER();
-        LOAD_A_M64K16_F16BF16();
-        LOAD_B_N8K16_F16BF16();
-        ALLOC_TMEM(d_tmem_addr);
-        __syncthreads();
-        LOAD_D_M64N8();
-        __syncthreads();
-        i_desc |= (1 << 4) | (1 << 7) | (1 << 10); // f32_bf16_bf16
-        MMA("f16");
-        STORE_D_M64N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        RELINQUISH_TMEM();
-    }
+    uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24) | (scale_code << 23) | (tcgen05_type_code<Kind, AType>() << 7) | (tcgen05_type_code<Kind, BType>() << 10);
+    tcgen05_mma_block_scale<Kind, BlockSize>(
+        d_tmem_addr, a_desc, b_desc, i_desc, sfa_tmem_addr, sfb_tmem_addr);
+    tcgen05_commit_and_wait(mma_barrier);
 
-    __global__ void tcgen05mma_m64n8k16_f16_f16_f16_kernel(
-        uint16_t *d, uint16_t *a, uint16_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 16;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint16_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr;
-        __shared__ uint64_t mma_barrier;
-
-        INIT_MBARRIER();
-        LOAD_A_M64K16_F16BF16();
-        LOAD_B_N8K16_F16BF16();
-        ALLOC_TMEM(d_tmem_addr);
-        __syncthreads();
-        LOAD_D_M64N8();
-        __syncthreads();
-        i_desc |= 0; // f16_f16_f16
-        MMA("f16");
-        STORE_D_M64N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        RELINQUISH_TMEM();
-    }
-
-    void tcgen05mma_m64n8k16_f32_f16_f16(
-        uint32_t *d, uint16_t *a, uint16_t *b)
-    {
-        tcgen05mma_m64n8k16_f32_f16_f16_kernel<<<1, 128>>>(d, a, b);
-    }
-
-    void tcgen05mma_m64n8k16_f32_bf16_bf16(
-        uint32_t *d, uint16_t *a, uint16_t *b)
-    {
-        tcgen05mma_m64n8k16_f32_bf16_bf16_kernel<<<1, 128>>>(d, a, b);
-    }
-
-    void tcgen05mma_m64n8k16_f16_f16_f16(
-        uint16_t *d, uint16_t *a, uint16_t *b)
-    {
-        tcgen05mma_m64n8k16_f16_f16_f16_kernel<<<1, 128>>>(d, a, b);
-    }
+    asm volatile("tcgen05.fence::after_thread_sync;" ::: "memory");
+    tcgen05_transfer_d<uint32_t, true>(d, d_tmem_addr, M, N, tid);
+    asm volatile("tcgen05.fence::before_thread_sync;" ::: "memory");
+    __syncthreads();
+    tcgen05_dealloc_tmem(d_tmem_addr, cols);
+    tcgen05_dealloc_tmem(sfa_tmem_addr, 32);
+    tcgen05_dealloc_tmem(sfb_tmem_addr, 32);
+    tcgen05_relinquish_tmem();
 }
 
-extern "C" // fp8 m64n8k32 f32_output
-{
-    __global__ void tcgen05mma_m64n8k32_f32_e5m2_e5m2_kernel(
-        uint32_t *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr;
-        __shared__ uint64_t mma_barrier;
+#define TCGEN05_DTYPE_f32 uint32_t
+#define TCGEN05_DTYPE_f16 uint16_t
 
-        INIT_MBARRIER();
-        LOAD_A_M64K32_FP8();
-        LOAD_B_N8K32_FP8();
-        ALLOC_TMEM(d_tmem_addr);
-        __syncthreads();
-        LOAD_D_M64N8();
-        __syncthreads();
-        i_desc |= (1 << 4) | (1 << 7) | (1 << 10); // f32_e5m2_e5m2
-        MMA("f8f6f4");
-        STORE_D_M64N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        RELINQUISH_TMEM();
+// One entry point per kind/type combination; Python binds the M/N dimensions.
+#define DEFINE_TCGEN05(kind, dtype, atype, btype)                                                           \
+    extern "C" void tcgen05mma_kind_##kind##_##dtype##_##atype##_##btype(                                   \
+        TCGEN05_DTYPE_##dtype *d, void *a, void *b, uint32_t m, uint32_t n)                                 \
+    {                                                                                                       \
+        tcgen05mma_kernel<TCGen05Kind::kind, TCGen05Type::atype, TCGen05Type::btype, TCGEN05_DTYPE_##dtype> \
+            <<<1, 128>>>(d, a, b, m, n);                                                                    \
     }
 
-    __global__ void tcgen05mma_m64n8k32_f32_e4m3_e4m3_kernel(
-        uint32_t *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr;
-        __shared__ uint64_t mma_barrier;
-
-        INIT_MBARRIER();
-        LOAD_A_M64K32_FP8();
-        LOAD_B_N8K32_FP8();
-        ALLOC_TMEM(d_tmem_addr);
-        __syncthreads();
-        LOAD_D_M64N8();
-        __syncthreads();
-        i_desc |= 1 << 4; // f32_e4m3_e4m3
-        MMA("f8f6f4");
-        STORE_D_M64N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        RELINQUISH_TMEM();
+#define DEFINE_TCGEN05_BLOCK_SCALE(kind, block, stype, atype, btype)                             \
+    extern "C" void tcgen05mma_kind_##kind##_block##block##_f32_##atype##_##btype##_##stype(     \
+        uint32_t *d, void *a, void *b, uint8_t *sfa, uint8_t *sfb, uint32_t m, uint32_t n)       \
+    {                                                                                            \
+        tcgen05mma_block_scale_kernel<TCGen05Kind::kind, TCGen05Type::atype, TCGen05Type::btype, \
+                                      block, TCGen05ScaleType::stype>                            \
+            <<<1, 128>>>(d, a, b, sfa, sfb, m, n);                                               \
     }
 
-    void tcgen05mma_m64n8k32_f32_e5m2_e5m2(
-        uint32_t *d, uint8_t *a, uint8_t *b)
-    {
-        tcgen05mma_m64n8k32_f32_e5m2_e5m2_kernel<<<1, 128>>>(d, a, b);
-    }
+DEFINE_TCGEN05(tf32, f32, tf32, tf32)
 
-    void tcgen05mma_m64n8k32_f32_e4m3_e4m3(
-        uint32_t *d, uint8_t *a, uint8_t *b)
-    {
-        tcgen05mma_m64n8k32_f32_e4m3_e4m3_kernel<<<1, 128>>>(d, a, b);
-    }
-}
+DEFINE_TCGEN05(f16, f32, f16, f16)
+DEFINE_TCGEN05(f16, f32, f16, bf16)
+DEFINE_TCGEN05(f16, f32, bf16, f16)
+DEFINE_TCGEN05(f16, f32, bf16, bf16)
+DEFINE_TCGEN05(f16, f16, f16, f16)
 
-extern "C" // fp6 and fp4 m64n8k32 f32_output
-{
-    __global__ void tcgen05mma_m64n8k32_f32_e3m2_e3m2_kernel(
-        uint32_t *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr;
-        __shared__ uint64_t mma_barrier;
+#define DEFINE_TCGEN05_F8F6F4(atype, btype)   \
+    DEFINE_TCGEN05(f8f6f4, f32, atype, btype) \
+    DEFINE_TCGEN05(f8f6f4, f16, atype, btype)
 
-        INIT_MBARRIER();
-        LOAD_A_M64K32_FP6();
-        LOAD_B_N8K32_FP6();
-        ALLOC_TMEM(d_tmem_addr);
-        __syncthreads();
-        LOAD_D_M64N8();
-        __syncthreads();
-        i_desc |= (1 << 4) | (4 << 7) | (4 << 10); // f32_e3m2_e3m2
-        MMA("f8f6f4");
-        STORE_D_M64N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        RELINQUISH_TMEM();
-    }
+#define DEFINE_TCGEN05_F8F6F4_FOR_A(atype) \
+    DEFINE_TCGEN05_F8F6F4(atype, e5m2)     \
+    DEFINE_TCGEN05_F8F6F4(atype, e4m3)     \
+    DEFINE_TCGEN05_F8F6F4(atype, e3m2)     \
+    DEFINE_TCGEN05_F8F6F4(atype, e2m3)     \
+    DEFINE_TCGEN05_F8F6F4(atype, e2m1)
 
-    __global__ void tcgen05mma_m64n8k32_f32_e2m3_e2m3_kernel(
-        uint32_t *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr;
-        __shared__ uint64_t mma_barrier;
+DEFINE_TCGEN05_F8F6F4_FOR_A(e5m2)
+DEFINE_TCGEN05_F8F6F4_FOR_A(e4m3)
+DEFINE_TCGEN05_F8F6F4_FOR_A(e3m2)
+DEFINE_TCGEN05_F8F6F4_FOR_A(e2m3)
+DEFINE_TCGEN05_F8F6F4_FOR_A(e2m1)
 
-        INIT_MBARRIER();
-        LOAD_A_M64K32_FP6();
-        LOAD_B_N8K32_FP6();
-        ALLOC_TMEM(d_tmem_addr);
-        __syncthreads();
-        LOAD_D_M64N8();
-        __syncthreads();
-        i_desc |= (1 << 4) | (3 << 7) | (3 << 10); // f32_e2m3_e2m3
-        MMA("f8f6f4");
-        STORE_D_M64N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        RELINQUISH_TMEM();
-    }
+#define DEFINE_TCGEN05_MXF8F6F4_FOR_A(atype)                     \
+    DEFINE_TCGEN05_BLOCK_SCALE(mxf8f6f4, 32, ue8m0, atype, e5m2) \
+    DEFINE_TCGEN05_BLOCK_SCALE(mxf8f6f4, 32, ue8m0, atype, e4m3) \
+    DEFINE_TCGEN05_BLOCK_SCALE(mxf8f6f4, 32, ue8m0, atype, e3m2) \
+    DEFINE_TCGEN05_BLOCK_SCALE(mxf8f6f4, 32, ue8m0, atype, e2m3) \
+    DEFINE_TCGEN05_BLOCK_SCALE(mxf8f6f4, 32, ue8m0, atype, e2m1)
 
-    __global__ void tcgen05mma_m64n8k32_f32_e2m1_e2m1_kernel(
-        uint32_t *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr;
-        __shared__ uint64_t mma_barrier;
+DEFINE_TCGEN05_MXF8F6F4_FOR_A(e5m2)
+DEFINE_TCGEN05_MXF8F6F4_FOR_A(e4m3)
+DEFINE_TCGEN05_MXF8F6F4_FOR_A(e3m2)
+DEFINE_TCGEN05_MXF8F6F4_FOR_A(e2m3)
+DEFINE_TCGEN05_MXF8F6F4_FOR_A(e2m1)
 
-        INIT_MBARRIER();
-        LOAD_A_M64K32_FP4();
-        LOAD_B_N8K32_FP4();
-        ALLOC_TMEM(d_tmem_addr);
-        __syncthreads();
-        LOAD_D_M64N8();
-        __syncthreads();
-        i_desc |= (1 << 4) | (5 << 7) | (5 << 10); // f32_e2m1_e2m1
-        MMA("f8f6f4");
-        STORE_D_M64N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        RELINQUISH_TMEM();
-    }
+DEFINE_TCGEN05_BLOCK_SCALE(mxf4, 32, ue8m0, e2m1, e2m1)
 
-    void tcgen05mma_m64n8k32_f32_e3m2_e3m2(
-        uint32_t *d, uint8_t *a, uint8_t *b)
-    {
-        tcgen05mma_m64n8k32_f32_e3m2_e3m2_kernel<<<1, 128>>>(d, a, b);
-    }
-
-    void tcgen05mma_m64n8k32_f32_e2m3_e2m3(
-        uint32_t *d, uint8_t *a, uint8_t *b)
-    {
-        tcgen05mma_m64n8k32_f32_e2m3_e2m3_kernel<<<1, 128>>>(d, a, b);
-    }
-
-    void tcgen05mma_m64n8k32_f32_e2m1_e2m1(
-        uint32_t *d, uint8_t *a, uint8_t *b)
-    {
-        tcgen05mma_m64n8k32_f32_e2m1_e2m1_kernel<<<1, 128>>>(d, a, b);
-    }
-}
-
-extern "C" // fp8 m64n8k32 f16_output
-{
-    __global__ void tcgen05mma_m64n8k32_f16_e5m2_e5m2_kernel(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr;
-        __shared__ uint64_t mma_barrier;
-
-        INIT_MBARRIER();
-        LOAD_A_M64K32_FP8();
-        LOAD_B_N8K32_FP8();
-        ALLOC_TMEM(d_tmem_addr);
-        __syncthreads();
-        LOAD_D_M64N8();
-        __syncthreads();
-        i_desc |= (1 << 7) | (1 << 10); // f16_e5m2_e5m2
-        MMA("f8f6f4");
-        STORE_D_M64N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        RELINQUISH_TMEM();
-    }
-
-    __global__ void tcgen05mma_m64n8k32_f16_e4m3_e4m3_kernel(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr;
-        __shared__ uint64_t mma_barrier;
-
-        INIT_MBARRIER();
-        LOAD_A_M64K32_FP8();
-        LOAD_B_N8K32_FP8();
-        ALLOC_TMEM(d_tmem_addr);
-        __syncthreads();
-        LOAD_D_M64N8();
-        __syncthreads();
-        i_desc |= 0; // f16_e4m3_e4m3
-        MMA("f8f6f4");
-        STORE_D_M64N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        RELINQUISH_TMEM();
-    }
-
-    void tcgen05mma_m64n8k32_f16_e5m2_e5m2(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        tcgen05mma_m64n8k32_f16_e5m2_e5m2_kernel<<<1, 128>>>(d, a, b);
-    }
-
-    void tcgen05mma_m64n8k32_f16_e4m3_e4m3(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        tcgen05mma_m64n8k32_f16_e4m3_e4m3_kernel<<<1, 128>>>(d, a, b);
-    }
-}
-
-extern "C" // fp6 and fp4 m64n8k32 f16_output
-{
-    __global__ void tcgen05mma_m64n8k32_f16_e3m2_e3m2_kernel(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr;
-        __shared__ uint64_t mma_barrier;
-
-        INIT_MBARRIER();
-        LOAD_A_M64K32_FP6();
-        LOAD_B_N8K32_FP6();
-        ALLOC_TMEM(d_tmem_addr);
-        __syncthreads();
-        LOAD_D_M64N8();
-        __syncthreads();
-        i_desc |= (4 << 7) | (4 << 10); // f16_e3m2_e3m2
-        MMA("f8f6f4");
-        STORE_D_M64N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        RELINQUISH_TMEM();
-    }
-
-    __global__ void tcgen05mma_m64n8k32_f16_e2m3_e2m3_kernel(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr;
-        __shared__ uint64_t mma_barrier;
-
-        INIT_MBARRIER();
-        LOAD_A_M64K32_FP6();
-        LOAD_B_N8K32_FP6();
-        ALLOC_TMEM(d_tmem_addr);
-        __syncthreads();
-        LOAD_D_M64N8();
-        __syncthreads();
-        i_desc |= (3 << 7) | (3 << 10); // f16_e2m3_e2m3
-        MMA("f8f6f4");
-        STORE_D_M64N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        RELINQUISH_TMEM();
-    }
-
-    __global__ void tcgen05mma_m64n8k32_f16_e2m1_e2m1_kernel(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        const uint32_t M = 64, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 4 << 24), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr;
-        __shared__ uint64_t mma_barrier;
-
-        INIT_MBARRIER();
-        LOAD_A_M64K32_FP4();
-        LOAD_B_N8K32_FP4();
-        ALLOC_TMEM(d_tmem_addr);
-        __syncthreads();
-        LOAD_D_M64N8();
-        __syncthreads();
-        i_desc |= (5 << 7) | (5 << 10); // f16_e2m1_e2m1
-        MMA("f8f6f4");
-        STORE_D_M64N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        RELINQUISH_TMEM();
-    }
-
-    void tcgen05mma_m64n8k32_f16_e3m2_e3m2(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        tcgen05mma_m64n8k32_f16_e3m2_e3m2_kernel<<<1, 128>>>(d, a, b);
-    }
-
-    void tcgen05mma_m64n8k32_f16_e2m3_e2m3(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        tcgen05mma_m64n8k32_f16_e2m3_e2m3_kernel<<<1, 128>>>(d, a, b);
-    }
-
-    void tcgen05mma_m64n8k32_f16_e2m1_e2m1(
-        uint16_t *d, uint8_t *a, uint8_t *b)
-    {
-        tcgen05mma_m64n8k32_f16_e2m1_e2m1_kernel<<<1, 128>>>(d, a, b);
-    }
-}
-
-extern "C" // mxfp8
-{
-    __global__ void tcgen05mma_m128n8k32_block32_f32_e5m2_e5m2_ue8m0_kernel(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        const uint32_t M = 128, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 7 << 27), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr, sfa_tmem_addr, sfb_tmem_addr;
-        __shared__ uint64_t mma_barrier;
-
-        INIT_MBARRIER();
-        LOAD_A_M128K32_FP8();
-        LOAD_B_N8K32_FP8();
-        ALLOC_TMEM(d_tmem_addr);
-        ALLOC_TMEM(sfa_tmem_addr);
-        ALLOC_TMEM(sfb_tmem_addr);
-        __syncthreads();
-        LOAD_D_M128N8();
-        LOAD_SFA_M128SFK1();
-        LOAD_SFB_N8SFK1();
-        __syncthreads();
-        i_desc |= (1 << 7) | (1 << 10) | (1 << 23); // e5m2_e5m2, ue8m0_scale
-        MMA_WITH_BLOCK_SCALE("mxf8f6f4", "scale_vec::1X");
-        STORE_D_M128N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        DEALLOC_TMEM(sfa_tmem_addr);
-        DEALLOC_TMEM(sfb_tmem_addr);
-        RELINQUISH_TMEM();
-    }
-
-    __global__ void tcgen05mma_m128n8k32_block32_f32_e4m3_e4m3_ue8m0_kernel(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        const uint32_t M = 128, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 7 << 27), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr, sfa_tmem_addr, sfb_tmem_addr;
-        __shared__ uint64_t mma_barrier;
-
-        INIT_MBARRIER();
-        LOAD_A_M128K32_FP8();
-        LOAD_B_N8K32_FP8();
-        ALLOC_TMEM(d_tmem_addr);
-        ALLOC_TMEM(sfa_tmem_addr);
-        ALLOC_TMEM(sfb_tmem_addr);
-        __syncthreads();
-        LOAD_D_M128N8();
-        LOAD_SFA_M128SFK1();
-        LOAD_SFB_N8SFK1();
-        __syncthreads();
-        i_desc |= 1 << 23; // e4m3_e4m3, ue8m0_scale
-        MMA_WITH_BLOCK_SCALE("mxf8f6f4", "scale_vec::1X");
-        STORE_D_M128N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        DEALLOC_TMEM(sfa_tmem_addr);
-        DEALLOC_TMEM(sfb_tmem_addr);
-        RELINQUISH_TMEM();
-    }
-
-    void tcgen05mma_m128n8k32_block32_f32_e5m2_e5m2_ue8m0(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        tcgen05mma_m128n8k32_block32_f32_e5m2_e5m2_ue8m0_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
-    }
-
-    void tcgen05mma_m128n8k32_block32_f32_e4m3_e4m3_ue8m0(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        tcgen05mma_m128n8k32_block32_f32_e4m3_e4m3_ue8m0_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
-    }
-}
-
-extern "C" // mxfp6 mxfp4
-{
-    __global__ void tcgen05mma_m128n8k32_block32_f32_e3m2_e3m2_ue8m0_kernel(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        const uint32_t M = 128, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 7 << 27), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr, sfa_tmem_addr, sfb_tmem_addr;
-        __shared__ uint64_t mma_barrier;
-
-        INIT_MBARRIER();
-        LOAD_A_M128K32_FP6();
-        LOAD_B_N8K32_FP6();
-        ALLOC_TMEM(d_tmem_addr);
-        ALLOC_TMEM(sfa_tmem_addr);
-        ALLOC_TMEM(sfb_tmem_addr);
-        __syncthreads();
-        LOAD_D_M128N8();
-        LOAD_SFA_M128SFK1();
-        LOAD_SFB_N8SFK1();
-        __syncthreads();
-        i_desc |= (4 << 7) | (4 << 10) | (1 << 23); // e3m2_e3m2, ue8m0_scale
-        MMA_WITH_BLOCK_SCALE("mxf8f6f4", "scale_vec::1X");
-        STORE_D_M128N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        DEALLOC_TMEM(sfa_tmem_addr);
-        DEALLOC_TMEM(sfb_tmem_addr);
-        RELINQUISH_TMEM();
-    }
-
-    __global__ void tcgen05mma_m128n8k32_block32_f32_e2m3_e2m3_ue8m0_kernel(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        const uint32_t M = 128, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 7 << 27), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr, sfa_tmem_addr, sfb_tmem_addr;
-        __shared__ uint64_t mma_barrier;
-
-        INIT_MBARRIER();
-        LOAD_A_M128K32_FP6();
-        LOAD_B_N8K32_FP6();
-        ALLOC_TMEM(d_tmem_addr);
-        ALLOC_TMEM(sfa_tmem_addr);
-        ALLOC_TMEM(sfb_tmem_addr);
-        __syncthreads();
-        LOAD_D_M128N8();
-        LOAD_SFA_M128SFK1();
-        LOAD_SFB_N8SFK1();
-        __syncthreads();
-        i_desc |= (3 << 7) | (3 << 10) | (1 << 23); // e2m3_e2m3, ue8m0_scale
-        MMA_WITH_BLOCK_SCALE("mxf8f6f4", "scale_vec::1X");
-        STORE_D_M128N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        DEALLOC_TMEM(sfa_tmem_addr);
-        DEALLOC_TMEM(sfb_tmem_addr);
-        RELINQUISH_TMEM();
-    }
-
-    __global__ void tcgen05mma_m128n8k32_block32_f32_e2m1_e2m1_ue8m0_kernel(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        const uint32_t M = 128, N = 8, K = 32;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 7 << 27), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K], b_smem[N * K];
-        __shared__ uint32_t d_tmem_addr, sfa_tmem_addr, sfb_tmem_addr;
-        __shared__ uint64_t mma_barrier;
-
-        INIT_MBARRIER();
-        LOAD_A_M128K32_FP4();
-        LOAD_B_N8K32_FP4();
-        ALLOC_TMEM(d_tmem_addr);
-        ALLOC_TMEM(sfa_tmem_addr);
-        ALLOC_TMEM(sfb_tmem_addr);
-        __syncthreads();
-        LOAD_D_M128N8();
-        LOAD_SFA_M128SFK1();
-        LOAD_SFB_N8SFK1();
-        __syncthreads();
-        i_desc |= (5 << 7) | (5 << 10) | (1 << 23); // e2m1_e2m1, ue8m0_scale
-        MMA_WITH_BLOCK_SCALE("mxf8f6f4", "scale_vec::1X");
-        STORE_D_M128N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        DEALLOC_TMEM(sfa_tmem_addr);
-        DEALLOC_TMEM(sfb_tmem_addr);
-        RELINQUISH_TMEM();
-    }
-
-    void tcgen05mma_m128n8k32_block32_f32_e3m2_e3m2_ue8m0(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        tcgen05mma_m128n8k32_block32_f32_e3m2_e3m2_ue8m0_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
-    }
-
-    void tcgen05mma_m128n8k32_block32_f32_e2m3_e2m3_ue8m0(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        tcgen05mma_m128n8k32_block32_f32_e2m3_e2m3_ue8m0_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
-    }
-
-    void tcgen05mma_m128n8k32_block32_f32_e2m1_e2m1_ue8m0(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        tcgen05mma_m128n8k32_block32_f32_e2m1_e2m1_ue8m0_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
-    }
-}
-
-extern "C" // mxfp4 nvfp4
-{
-    __global__ void tcgen05mma_m128n8k64_block32_f32_e2m1_e2m1_ue8m0_kernel(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        const uint32_t M = 128, N = 8, K = 64;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 7 << 27), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K / 2], b_smem[N * K / 2];
-        __shared__ uint32_t d_tmem_addr, sfa_tmem_addr, sfb_tmem_addr;
-        __shared__ uint64_t mma_barrier;
-
-        INIT_MBARRIER();
-        LOAD_A_M128K64_FP4();
-        LOAD_B_N8K64_FP4();
-        ALLOC_TMEM(d_tmem_addr);
-        ALLOC_TMEM(sfa_tmem_addr);
-        ALLOC_TMEM(sfb_tmem_addr);
-        __syncthreads();
-        LOAD_D_M128N8();
-        LOAD_SFA_M128SFK2();
-        LOAD_SFB_N8SFK2();
-        __syncthreads();
-        i_desc |= (1 << 7) | (1 << 10) | (1 << 23); // e2m1, ue8m0_scale
-        // .kind::mxf4 seems to behave the same as .kind::mxf4nvf4 for mxfp4
-        MMA_WITH_BLOCK_SCALE("mxf4nvf4", "scale_vec::2X");
-        STORE_D_M128N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        DEALLOC_TMEM(sfa_tmem_addr);
-        DEALLOC_TMEM(sfb_tmem_addr);
-        RELINQUISH_TMEM();
-    }
-
-    __global__ void tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue8m0_kernel(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        const uint32_t M = 128, N = 8, K = 64;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 7 << 27), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K / 2], b_smem[N * K / 2];
-        __shared__ uint32_t d_tmem_addr, sfa_tmem_addr, sfb_tmem_addr;
-        __shared__ uint64_t mma_barrier;
-
-        INIT_MBARRIER();
-        LOAD_A_M128K64_FP4();
-        LOAD_B_N8K64_FP4();
-        ALLOC_TMEM(d_tmem_addr);
-        ALLOC_TMEM(sfa_tmem_addr);
-        ALLOC_TMEM(sfb_tmem_addr);
-        __syncthreads();
-        LOAD_D_M128N8();
-        LOAD_SFA_M128SFK4();
-        LOAD_SFB_N8SFK4();
-        __syncthreads();
-        i_desc |= (1 << 7) | (1 << 10) | (1 << 23); // e2m1, ue8m0_scale
-        MMA_WITH_BLOCK_SCALE("mxf4nvf4", "scale_vec::4X");
-        STORE_D_M128N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        DEALLOC_TMEM(sfa_tmem_addr);
-        DEALLOC_TMEM(sfb_tmem_addr);
-        RELINQUISH_TMEM();
-    }
-
-    __global__ void tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue4m3_kernel(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        const uint32_t M = 128, N = 8, K = 64;
-        uint32_t tid = threadIdx.x, warpid = tid / 32, laneid = tid % 32;
-        uint32_t i_desc = (N >> 3 << 17) | (M >> 7 << 27), mma_barrier_phase_bit = 0;
-        uint64_t a_desc, b_desc;
-        __shared__ uint8_t a_smem[M * K / 2], b_smem[N * K / 2];
-        __shared__ uint32_t d_tmem_addr, sfa_tmem_addr, sfb_tmem_addr;
-        __shared__ uint64_t mma_barrier;
-
-        INIT_MBARRIER();
-        LOAD_A_M128K64_FP4();
-        LOAD_B_N8K64_FP4();
-        ALLOC_TMEM(d_tmem_addr);
-        ALLOC_TMEM(sfa_tmem_addr);
-        ALLOC_TMEM(sfb_tmem_addr);
-        __syncthreads();
-        LOAD_D_M128N8();
-        LOAD_SFA_M128SFK4();
-        LOAD_SFB_N8SFK4();
-        __syncthreads();
-        i_desc |= (1 << 7) | (1 << 10); // e2m1, ue4m3_scale
-        MMA_WITH_BLOCK_SCALE("mxf4nvf4", "scale_vec::4X");
-        STORE_D_M128N8();
-        DEALLOC_TMEM(d_tmem_addr);
-        DEALLOC_TMEM(sfa_tmem_addr);
-        DEALLOC_TMEM(sfb_tmem_addr);
-        RELINQUISH_TMEM();
-    }
-
-    void tcgen05mma_m128n8k64_block32_f32_e2m1_e2m1_ue8m0(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        tcgen05mma_m128n8k64_block32_f32_e2m1_e2m1_ue8m0_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
-    }
-
-    void tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue8m0(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue8m0_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
-    }
-
-    void tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue4m3(
-        uint32_t *d, uint8_t *a, uint8_t *b, uint8_t *sfa, uint8_t *sfb)
-    {
-        tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue4m3_kernel<<<1, 128>>>(d, a, b, sfa, sfb);
-    }
-}
+DEFINE_TCGEN05_BLOCK_SCALE(mxf4nvf4, 32, ue8m0, e2m1, e2m1)
+DEFINE_TCGEN05_BLOCK_SCALE(mxf4nvf4, 16, ue8m0, e2m1, e2m1)
+// DEFINE_TCGEN05_BLOCK_SCALE(mxf4nvf4, 32, ue4m3, e2m1, e2m1)  // requires sm_107
+DEFINE_TCGEN05_BLOCK_SCALE(mxf4nvf4, 16, ue4m3, e2m1, e2m1)

@@ -2,6 +2,7 @@ import ctypes
 from pathlib import Path
 
 from torch.utils.cpp_extension import load
+from mmasim.nv_ptx.isa_mma import volta_mma_shape_and_type
 from . import MMA
 
 dir = Path(__file__).with_name("kernels")
@@ -14,18 +15,8 @@ kernel_path = load(
 )
 lib = ctypes.CDLL(kernel_path)
 
-# f16
-lib.mma_m8n8k4_f32_f16_f16_f32.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m8n8k4_f32_f16_f16_f16.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m8n8k4_f16_f16_f16_f16.argtypes = [ctypes.c_void_p] * 4
-
-mma_cuda_kernels = {
-    # f16
-    "m8n8k4.f32.f16.f16.f32": lib.mma_m8n8k4_f32_f16_f16_f32,
-    "m8n8k4.f32.f16.f16.f16": lib.mma_m8n8k4_f32_f16_f16_f16,
-    "m8n8k4.f16.f16.f16.f16": lib.mma_m8n8k4_f16_f16_f16_f16,
-}
-mma_kernels = {
-    shape_and_type: MMA("Volta", shape_and_type, mma_cuda_kernels[shape_and_type])
-    for shape_and_type in mma_cuda_kernels
-}
+mma_kernels = {}
+for shape_and_type in volta_mma_shape_and_type:
+    kernel = lib.__getattr__(f"mma_{shape_and_type.replace('.', '_')}")
+    kernel.argtypes = [ctypes.c_void_p] * 4
+    mma_kernels[shape_and_type] = MMA("Volta", shape_and_type, kernel)
