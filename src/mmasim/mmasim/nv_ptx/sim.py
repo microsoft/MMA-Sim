@@ -27,6 +27,8 @@ class MMA(isa_mma.MMA):
                     "RTX Blackwell": 25,
                 }
                 F = F_table[arch]
+                if shape_and_type in isa_mma.volta_mma_shape_and_type:
+                    F = 23  # special case on Turing
                 rho = "RNE-FP16" if self.d_type == torch.float16 else "RZ-FP32"
             L_max_bytes = {
                 "Volta": 4 * 2,
