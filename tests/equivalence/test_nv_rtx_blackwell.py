@@ -1,10 +1,16 @@
-from mmasim_kernels.nv_ptx.rtx_blackwell import mma_kernels, mma_block_scale_kernels
+from mmasim_kernels.nv_ptx.rtx_blackwell import (
+    mma_kernels,
+    mma_block_scale_kernels,
+    unavailable_mma_block_scale_kernels,
+)
 from mmasim.nv_ptx import MMA, MMABlockScale
 
 from helper import random_test
 
 
 def test_nv_rtx_blackwell(trials: int = 100):
+    for signature, reason in unavailable_mma_block_scale_kernels.items():
+        print(f"Skipping RTX Blackwell instruction mma.{signature}: {reason}")
     for shape_and_type, kernel in mma_kernels.items():
         print(f"Testing RTX Blackwell instruction mma.{shape_and_type}")
         random_test(

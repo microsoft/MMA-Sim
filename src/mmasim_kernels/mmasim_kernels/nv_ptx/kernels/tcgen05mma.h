@@ -1,593 +1,278 @@
+#pragma once
 #include <stdint.h>
+#include <type_traits>
 
-#define desc_encode(x) (((x) & 0x3ffff) >> 4)
+enum class TCGen05Kind
+{
+    tf32,
+    f16,
+    f8f6f4,
+    mxf8f6f4,
+    mxf4,
+    mxf4nvf4
+};
+enum class TCGen05Type
+{
+    tf32,
+    f16,
+    bf16,
+    e4m3,
+    e5m2,
+    e2m3,
+    e3m2,
+    e2m1
+};
+enum class TCGen05ScaleType
+{
+    ue8m0,
+    ue4m3
+};
 
-#define ALLOC_TMEM(tmem_addr)                                           \
-    do                                                                  \
-    {                                                                   \
-        if (warpid == 0)                                                \
-        {                                                               \
-            asm volatile(                                               \
-                "tcgen05.alloc.cta_group::1.sync.aligned.b32 [%0], 32;" \
-                :                                                       \
-                : "r"((uint32_t)__cvta_generic_to_shared(&tmem_addr))); \
-        }                                                               \
-    } while (0)
+template <TCGen05Kind Kind, TCGen05Type Type>
+__device__ constexpr uint32_t tcgen05_type_code()
+{
+    if constexpr (Kind == TCGen05Kind::mxf4 || Kind == TCGen05Kind::mxf4nvf4)
+        return 1;
+    if constexpr (Type == TCGen05Type::f16 || Type == TCGen05Type::e4m3)
+        return 0;
+    if constexpr (Type == TCGen05Type::bf16 || Type == TCGen05Type::e5m2)
+        return 1;
+    if constexpr (Type == TCGen05Type::tf32)
+        return 2;
+    if constexpr (Type == TCGen05Type::e2m3)
+        return 3;
+    if constexpr (Type == TCGen05Type::e3m2)
+        return 4;
+    return 5;
+}
 
-#define DEALLOC_TMEM(tmem_addr)                                         \
-    do                                                                  \
-    {                                                                   \
-        if (warpid == 0)                                                \
-        {                                                               \
-            asm volatile(                                               \
-                "tcgen05.dealloc.cta_group::1.sync.aligned.b32 %0, 32;" \
-                :                                                       \
-                : "r"(tmem_addr));                                      \
-        }                                                               \
-    } while (0)
+__device__ inline uint32_t tcgen05_desc_encode(uint64_t value)
+{
+    return (value & 0x3ffff) >> 4;
+}
 
-#define RELINQUISH_TMEM()                                                               \
-    do                                                                                  \
-    {                                                                                   \
-        if (warpid == 0)                                                                \
-        {                                                                               \
-            asm volatile("tcgen05.relinquish_alloc_permit.cta_group::1.sync.aligned;"); \
-        }                                                                               \
-    } while (0)
+__device__ inline uint32_t tcgen05_tmem_columns(uint32_t n)
+{
+    uint32_t cols = 32;
+    while (cols < n)
+        cols *= 2;
+    return cols;
+}
 
-#define INIT_MBARRIER()                                                            \
-    do                                                                             \
-    {                                                                              \
-        if (tid == 0)                                                              \
-        {                                                                          \
-            asm volatile("mbarrier.init.shared::cta.b64 [%0], 1;"                  \
-                         :                                                         \
-                         : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier))); \
-        }                                                                          \
-    } while (0)
+__device__ inline void tcgen05_alloc_tmem(uint32_t &addr, uint32_t cols)
+{
+    if (threadIdx.x < 32)
+        asm volatile("tcgen05.alloc.cta_group::1.sync.aligned.b32 [%0], %1;" ::"r"((uint32_t)__cvta_generic_to_shared(&addr)), "r"(cols));
+}
 
-#define WAIT_MBARRIER()                                                \
-    do                                                                 \
-    {                                                                  \
-        asm volatile(                                                  \
-            "{\n"                                                      \
-            ".reg .pred P1;\n"                                         \
-            "LAB_WAIT:\n"                                              \
-            "mbarrier.try_wait.parity.shared::cta.b64 P1, [%0], %1;\n" \
-            "@P1    bra DONE;\n"                                       \
-            "bra    LAB_WAIT;\n"                                       \
-            "DONE:\n"                                                  \
-            "}\n"                                                      \
-            :                                                          \
-            : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier)),   \
-              "r"(mma_barrier_phase_bit));                             \
-        mma_barrier_phase_bit ^= 1;                                    \
-    } while (0)
+__device__ inline void tcgen05_dealloc_tmem(uint32_t addr, uint32_t cols)
+{
+    if (threadIdx.x < 32)
+        asm volatile("tcgen05.dealloc.cta_group::1.sync.aligned.b32 %0, %1;" ::"r"(addr), "r"(cols));
+}
 
-// (8x2) tiles, each with (8x4) elements
-#define LOAD_A_M64K8_TF32()                                     \
-    do                                                          \
-    {                                                           \
-        for (uint32_t i = 0; i < 8; i += 2)                     \
-        {                                                       \
-            uint32_t row = i * 8 + warpid / 2 * 8 + laneid / 4; \
-            uint32_t col = warpid % 2 * 4 + laneid % 4;         \
-            a_smem[i * 64 + tid] = a[row * K + col];            \
-        }                                                       \
-        a_desc = desc_encode(__cvta_generic_to_shared(a_smem)); \
-        a_desc |= desc_encode(128ll) << 16;                     \
-        a_desc |= desc_encode(256ll) << 32;                     \
-        a_desc |= 1ll << 46;                                    \
-    } while (0)
+__device__ inline void tcgen05_relinquish_tmem()
+{
+    if (threadIdx.x < 32)
+        asm volatile("tcgen05.relinquish_alloc_permit.cta_group::1.sync.aligned;");
+}
 
-// (8x2) tiles, each with (8x8) elements
-#define LOAD_A_M64K16_F16BF16()                                 \
-    do                                                          \
-    {                                                           \
-        for (uint32_t i = 0; i < 8; i++)                        \
-        {                                                       \
-            uint32_t row = i * 8 + tid % 64 / 8;                \
-            uint32_t col = tid / 64 * 8 + tid % 8;              \
-            a_smem[i * 128 + tid] = a[row * K + col];           \
-        }                                                       \
-        a_desc = desc_encode(__cvta_generic_to_shared(a_smem)); \
-        a_desc |= desc_encode(128ll) << 16;                     \
-        a_desc |= desc_encode(256ll) << 32;                     \
-        a_desc |= 1ll << 46;                                    \
-    } while (0)
+__device__ inline void tcgen05_init_barrier(uint64_t &barrier)
+{
+    if (threadIdx.x == 0)
+        asm volatile("mbarrier.init.shared::cta.b64 [%0], 1;" ::"r"((uint32_t)__cvta_generic_to_shared(&barrier)));
+}
 
-// (16x2) tiles, each with (8x16) elements
-#define LOAD_A_M128K32_FP8()                                        \
-    do                                                              \
-    {                                                               \
-        for (uint32_t i = 0; i < 16; i++)                           \
-        {                                                           \
-            for (uint32_t k = 0; k < 2; k++)                        \
-            {                                                       \
-                uint32_t row = i * 8 + tid / 16;                    \
-                uint32_t col = k * 16 + tid % 16;                   \
-                a_smem[i * 256 + k * 128 + tid] = a[row * K + col]; \
-            }                                                       \
-        }                                                           \
-        a_desc = desc_encode(__cvta_generic_to_shared(a_smem));     \
-        a_desc |= desc_encode(128ll) << 16;                         \
-        a_desc |= desc_encode(256ll) << 32;                         \
-        a_desc |= 1ll << 46;                                        \
-    } while (0)
+// Each kernel issues one MMA, so the newly initialized barrier uses phase 0.
+__device__ inline void tcgen05_commit_and_wait(uint64_t &barrier)
+{
+    uint32_t addr = (uint32_t)__cvta_generic_to_shared(&barrier);
+    if (threadIdx.x == 0)
+        asm volatile("tcgen05.commit.cta_group::1.mbarrier::arrive::one.shared::cluster.b64 [%0];" ::"r"(addr));
+    asm volatile(
+        "{\n"
+        "  .reg .pred ready;\n"
+        "wait_mma:\n"
+        "  mbarrier.try_wait.parity.shared::cta.b64 ready, [%0], 0;\n"
+        "  @!ready bra wait_mma;\n"
+        "}\n" ::"r"(addr) : "memory");
+}
 
-// (8x2) tiles, each with (8x16) elements
-#define LOAD_A_M64K32_FP8()                                         \
-    do                                                              \
-    {                                                               \
-        for (uint32_t i = 0; i < 8; i++)                            \
-        {                                                           \
-            for (uint32_t k = 0; k < 2; k++)                        \
-            {                                                       \
-                uint32_t row = i * 8 + tid / 16;                    \
-                uint32_t col = k * 16 + tid % 16;                   \
-                a_smem[i * 256 + k * 128 + tid] = a[row * K + col]; \
-            }                                                       \
-        }                                                           \
-        a_desc = desc_encode(__cvta_generic_to_shared(a_smem));     \
-        a_desc |= desc_encode(128ll) << 16;                         \
-        a_desc |= desc_encode(256ll) << 32;                         \
-        a_desc |= 1ll << 46;                                        \
-    } while (0)
+#define TCGEN05_MMA_ASM(kind)                                                                                                                  \
+    asm volatile(                                                                                                                              \
+        "tcgen05.mma.cta_group::1.kind::" kind " [%0], %1, %2, %3, {%4, %5, %6, %7}, 1;" ::"r"(d_addr), "l"(a_desc), "l"(b_desc), "r"(i_desc), \
+        "r"(0u), "r"(0u), "r"(0u), "r"(0u))
 
-// (16x2) tiles, each with (8x16) elements, packed in 12 bytes
-#define LOAD_A_M128K32_FP6()                                    \
-    do                                                          \
-    {                                                           \
-        for (uint32_t i = 0; i < 16; i++)                       \
-        {                                                       \
-            for (uint32_t k = 0; k < 2; k++)                    \
-            {                                                   \
-                uint32_t row = i * 8 + tid / 16;                \
-                uint32_t col = k * 16 + tid % 16 * 8 / 6;       \
-                uint32_t shift = tid % 16 * 8 % 6;              \
-                uint8_t x = 0;                                  \
-                if (tid % 16 < 12)                              \
-                {                                               \
-                    uint8_t lo = a[row * K + col] & 0x3f;       \
-                    uint8_t hi = a[row * K + col + 1] & 0x3f;   \
-                    x = lo >> shift | hi << (6 - shift);        \
-                }                                               \
-                a_smem[i * 256 + k * 128 + tid] = x;            \
-            }                                                   \
-        }                                                       \
-        a_desc = desc_encode(__cvta_generic_to_shared(a_smem)); \
-        a_desc |= desc_encode(128ll) << 16;                     \
-        a_desc |= desc_encode(256ll) << 32;                     \
-        a_desc |= 1ll << 46;                                    \
-    } while (0)
+template <TCGen05Kind Kind>
+__device__ void tcgen05_mma(uint32_t d_addr, uint64_t a_desc, uint64_t b_desc, uint32_t i_desc)
+{
+    if (threadIdx.x == 0)
+    {
+        if constexpr (Kind == TCGen05Kind::tf32)
+        {
+            TCGEN05_MMA_ASM("tf32");
+        }
+        if constexpr (Kind == TCGen05Kind::f16)
+        {
+            TCGEN05_MMA_ASM("f16");
+        }
+        if constexpr (Kind == TCGen05Kind::f8f6f4)
+        {
+            TCGEN05_MMA_ASM("f8f6f4");
+        }
+    }
+}
 
-// (8x2) tiles, each with (8x16) elements, packed in 12 bytes
-#define LOAD_A_M64K32_FP6()                                     \
-    do                                                          \
-    {                                                           \
-        for (uint32_t i = 0; i < 8; i++)                        \
-        {                                                       \
-            for (uint32_t k = 0; k < 2; k++)                    \
-            {                                                   \
-                uint32_t row = i * 8 + tid / 16;                \
-                uint32_t col = k * 16 + tid % 16 * 8 / 6;       \
-                uint32_t shift = tid % 16 * 8 % 6;              \
-                uint8_t x = 0;                                  \
-                if (tid % 16 < 12)                              \
-                {                                               \
-                    uint8_t lo = a[row * K + col] & 0x3f;       \
-                    uint8_t hi = a[row * K + col + 1] & 0x3f;   \
-                    x = lo >> shift | hi << (6 - shift);        \
-                }                                               \
-                a_smem[i * 256 + k * 128 + tid] = x;            \
-            }                                                   \
-        }                                                       \
-        a_desc = desc_encode(__cvta_generic_to_shared(a_smem)); \
-        a_desc |= desc_encode(128ll) << 16;                     \
-        a_desc |= desc_encode(256ll) << 32;                     \
-        a_desc |= 1ll << 46;                                    \
-    } while (0)
+#define TCGEN05_MMA_BLOCK_SCALE_ASM(kind, scale_vec)                                    \
+    asm volatile(                                                                       \
+        "tcgen05.mma.cta_group::1.kind::" kind ".block_scale.scale_vec::" scale_vec " " \
+        "[%0], %1, %2, %3, [%4], [%5], 1;" ::"r"(d_addr),                               \
+        "l"(a_desc), "l"(b_desc), "r"(i_desc), "r"(sfa_addr), "r"(sfb_addr))
 
-// (16x2) tiles, each with (8x16) elements, packed in 8 bytes
-#define LOAD_A_M128K32_FP4()                                      \
-    do                                                            \
-    {                                                             \
-        for (uint32_t i = 0; i < 16; i++)                         \
-        {                                                         \
-            for (uint32_t k = 0; k < 2; k++)                      \
-            {                                                     \
-                uint32_t row = i * 8 + tid / 16;                  \
-                uint32_t col = k * 16 + tid % 16 * 2;             \
-                uint8_t x = 0;                                    \
-                if (tid % 16 < 8)                                 \
-                {                                                 \
-                    uint8_t lo = a[row * K + col] >> 2 & 0xf;     \
-                    uint8_t hi = a[row * K + col + 1] >> 2 & 0xf; \
-                    x = lo | hi << 4;                             \
-                }                                                 \
-                a_smem[i * 256 + k * 128 + tid] = x;              \
-            }                                                     \
-        }                                                         \
-        a_desc = desc_encode(__cvta_generic_to_shared(a_smem));   \
-        a_desc |= desc_encode(128ll) << 16;                       \
-        a_desc |= desc_encode(256ll) << 32;                       \
-        a_desc |= 1ll << 46;                                      \
-    } while (0)
+template <TCGen05Kind Kind, int BlockSize>
+__device__ void tcgen05_mma_block_scale(uint32_t d_addr, uint64_t a_desc, uint64_t b_desc,
+                                        uint32_t i_desc, uint32_t sfa_addr, uint32_t sfb_addr)
+{
+    if (threadIdx.x == 0)
+    {
+        if constexpr (Kind == TCGen05Kind::mxf8f6f4)
+        {
+            TCGEN05_MMA_BLOCK_SCALE_ASM("mxf8f6f4", "1X");
+        }
+        if constexpr (Kind == TCGen05Kind::mxf4)
+        {
+            TCGEN05_MMA_BLOCK_SCALE_ASM("mxf4", "2X");
+        }
+        if constexpr (Kind == TCGen05Kind::mxf4nvf4 && BlockSize == 32)
+        {
+            TCGEN05_MMA_BLOCK_SCALE_ASM("mxf4nvf4", "2X");
+        }
+        if constexpr (Kind == TCGen05Kind::mxf4nvf4 && BlockSize == 16)
+        {
+            TCGEN05_MMA_BLOCK_SCALE_ASM("mxf4nvf4", "4X");
+        }
+    }
+}
 
-// (8x2) tiles, each with (8x16) elements, packed in 8 bytes
-#define LOAD_A_M64K32_FP4()                                       \
-    do                                                            \
-    {                                                             \
-        for (uint32_t i = 0; i < 8; i++)                          \
-        {                                                         \
-            for (uint32_t k = 0; k < 2; k++)                      \
-            {                                                     \
-                uint32_t row = i * 8 + tid / 16;                  \
-                uint32_t col = k * 16 + tid % 16 * 2;             \
-                uint8_t x = 0;                                    \
-                if (tid % 16 < 8)                                 \
-                {                                                 \
-                    uint8_t lo = a[row * K + col] >> 2 & 0xf;     \
-                    uint8_t hi = a[row * K + col + 1] >> 2 & 0xf; \
-                    x = lo | hi << 4;                             \
-                }                                                 \
-                a_smem[i * 256 + k * 128 + tid] = x;              \
-            }                                                     \
-        }                                                         \
-        a_desc = desc_encode(__cvta_generic_to_shared(a_smem));   \
-        a_desc |= desc_encode(128ll) << 16;                       \
-        a_desc |= desc_encode(256ll) << 32;                       \
-        a_desc |= 1ll << 46;                                      \
-    } while (0)
+// Descriptor for K-major 8-row x 16-byte tiles, two K tiles per row group.
+__device__ inline uint64_t tcgen05_smem_desc(const void *ptr)
+{
+    return tcgen05_desc_encode(__cvta_generic_to_shared(ptr)) | (uint64_t(tcgen05_desc_encode(128)) << 16) | (uint64_t(tcgen05_desc_encode(256)) << 32) | (1ull << 46);
+}
 
-// (16x2) tiles, each with (8x32) elements
-#define LOAD_A_M128K64_FP4()                                                \
-    do                                                                      \
-    {                                                                       \
-        for (uint32_t i = 0; i < 16; i++)                                   \
-        {                                                                   \
-            for (uint32_t k = 0; k < 2; k++)                                \
-            {                                                               \
-                uint32_t row = i * 8 + tid / 16;                            \
-                uint32_t col = k * 32 + tid % 16 * 2;                       \
-                a_smem[i * 256 + k * 128 + tid] = a[row * K / 2 + col / 2]; \
-            }                                                               \
-        }                                                                   \
-        a_desc = desc_encode(__cvta_generic_to_shared(a_smem));             \
-        a_desc |= desc_encode(128ll) << 16;                                 \
-        a_desc |= desc_encode(256ll) << 32;                                 \
-        a_desc |= 1ll << 46;                                                \
-    } while (0)
+template <TCGen05Kind Kind, TCGen05Type Type>
+__device__ void tcgen05_pack_operand(uint8_t *dst, const void *input,
+                                     uint32_t rows, uint32_t tid)
+{
+    const uint8_t *src = static_cast<const uint8_t *>(input);
+    for (uint32_t index = tid; index < rows * 32; index += 128)
+    {
+        uint32_t row = index / 32, tile = index % 32 / 16, byte = index % 16;
+        uint8_t value;
+        if constexpr ((Kind == TCGen05Kind::f8f6f4 || Kind == TCGen05Kind::mxf8f6f4) && (Type == TCGen05Type::e2m3 || Type == TCGen05Type::e3m2))
+        {
+            // Sixteen 6-bit values occupy 12 bytes; the last 4 bytes are padding.
+            value = 0;
+            if (byte < 12)
+            {
+                uint32_t col = tile * 16 + byte * 8 / 6;
+                uint32_t shift = byte * 8 % 6;
+                uint32_t bits = src[row * 32 + col] & 0x3f;
+                if (col % 16 != 15)
+                    bits |= (src[row * 32 + col + 1] & 0x3f) << 6;
+                value = bits >> shift;
+            }
+        }
+        else if constexpr ((Kind == TCGen05Kind::f8f6f4 || Kind == TCGen05Kind::mxf8f6f4) && Type == TCGen05Type::e2m1)
+        {
+            // Sixteen FP4 values occupy 8 bytes; the last 8 bytes are padding.
+            value = 0;
+            if (byte < 8)
+            {
+                uint32_t col = tile * 16 + byte * 2;
+                value = ((src[row * 32 + col] >> 2) & 15) | (((src[row * 32 + col + 1] >> 2) & 15) << 4);
+            }
+        }
+        else
+        {
+            // TF32/F16/BF16, FP8, and already packed MXFP4/NVFP4.
+            value = src[index];
+        }
+        dst[(row / 8) * 256 + tile * 128 + (row % 8) * 16 + byte] = value;
+    }
+}
 
-// (2x1) tiles, each with (4x8) elements
-#define LOAD_B_N8K8_TF32()                                      \
-    do                                                          \
-    {                                                           \
-        if (tid < 64)                                           \
-        {                                                       \
-            uint32_t row = warpid * 4 + laneid % 4;             \
-            uint32_t col = laneid / 4;                          \
-            b_smem[tid] = b[col * K + row];                     \
-        }                                                       \
-        b_desc = desc_encode(__cvta_generic_to_shared(b_smem)); \
-        b_desc |= desc_encode(128ll) << 16;                     \
-        b_desc |= desc_encode(256ll) << 32;                     \
-        b_desc |= 1ll << 46;                                    \
-    } while (0)
+// PTX requires each D element (including F16) in a separate 32-bit word.
+// M=64 uses only 16 datapath lanes in each 32-lane partition (layout F).
+template <typename D, bool Store>
+__device__ void tcgen05_transfer_d(D *d, uint32_t addr, uint32_t m, uint32_t n,
+                                   uint32_t tid)
+{
+    uint32_t warp = tid / 32, lane = tid % 32;
+    uint32_t base = addr + ((warp * 32) << 16);
+    if (m == 128)
+    {
+        for (uint32_t col = 0; col < n; ++col)
+        {
+            uint32_t word;
+            if constexpr (Store)
+            {
+                asm volatile("tcgen05.ld.sync.aligned.32x32b.x1.b32 {%0}, [%1];"
+                             : "=r"(word) : "r"(base + col));
+                asm volatile("tcgen05.wait::ld.sync.aligned;");
+                d[tid * n + col] = D(word);
+            }
+            else
+            {
+                word = uint32_t(d[tid * n + col]);
+                asm volatile("tcgen05.st.sync.aligned.32x32b.x1.b32 [%0], {%1};" ::"r"(base + col), "r"(word));
+                asm volatile("tcgen05.wait::st.sync.aligned;");
+            }
+        }
+    }
+    else
+    {
+        for (uint32_t col = 0; col < n; col += 8)
+        {
+            uint32_t r[4];
+            if constexpr (Store)
+            {
+                asm volatile("tcgen05.ld.sync.aligned.16x256b.x1.b32 {%0, %1, %2, %3}, [%4];"
+                             : "=r"(r[0]), "=r"(r[1]), "=r"(r[2]), "=r"(r[3])
+                             : "r"(base + col));
+                asm volatile("tcgen05.wait::ld.sync.aligned;");
+            }
+            for (uint32_t i = 0; i < 4; ++i)
+            {
+                uint32_t row = warp * 16 + i / 2 * 8 + lane / 4;
+                uint32_t offset = row * n + col + lane % 4 * 2 + i % 2;
+                if constexpr (Store)
+                    d[offset] = D(r[i]);
+                else
+                    r[i] = uint32_t(d[offset]);
+            }
+            if constexpr (!Store)
+            {
+                asm volatile("tcgen05.st.sync.aligned.16x256b.x1.b32 [%0], {%1, %2, %3, %4};" ::"r"(base + col), "r"(r[0]), "r"(r[1]), "r"(r[2]), "r"(r[3]));
+                asm volatile("tcgen05.wait::st.sync.aligned;");
+            }
+        }
+    }
+}
 
-// (2x1) tiles, each with (8x8) elements
-#define LOAD_B_N8K16_F16BF16()                                  \
-    do                                                          \
-    {                                                           \
-        uint32_t row = tid / 64 * 8 + tid % 8;                  \
-        uint32_t col = tid % 64 / 8;                            \
-        b_smem[tid] = b[col * K + row];                         \
-        b_desc = desc_encode(__cvta_generic_to_shared(b_smem)); \
-        b_desc |= desc_encode(128ll) << 16;                     \
-        b_desc |= desc_encode(256ll) << 32;                     \
-        b_desc |= 1ll << 46;                                    \
-    } while (0)
-
-// (2x1) tiles, each with (16x8) elements
-#define LOAD_B_N8K32_FP8()                                      \
-    do                                                          \
-    {                                                           \
-        for (uint32_t k = 0; k < 2; k++)                        \
-        {                                                       \
-            uint32_t row = k * 16 + tid % 16;                   \
-            uint32_t col = tid / 16;                            \
-            b_smem[k * 128 + tid] = b[col * K + row];           \
-        }                                                       \
-        b_desc = desc_encode(__cvta_generic_to_shared(b_smem)); \
-        b_desc |= desc_encode(128ll) << 16;                     \
-        b_desc |= desc_encode(256ll) << 32;                     \
-        b_desc |= 1ll << 46;                                    \
-    } while (0)
-
-// (2x1) tiles, each with (16x8) elements, packed in 12 bytes
-#define LOAD_B_N8K32_FP6()                                      \
-    do                                                          \
-    {                                                           \
-        for (uint32_t k = 0; k < 2; k++)                        \
-        {                                                       \
-            uint32_t row = k * 16 + tid % 16 * 8 / 6;           \
-            uint32_t col = tid / 16;                            \
-            uint32_t shift = tid % 16 * 8 % 6;                  \
-            uint8_t x = 0;                                      \
-            if (tid % 16 < 12)                                  \
-            {                                                   \
-                uint8_t lo = b[col * K + row] & 0x3f;           \
-                uint8_t hi = b[col * K + row + 1] & 0x3f;       \
-                x = lo >> shift | hi << (6 - shift);            \
-            }                                                   \
-            b_smem[k * 128 + tid] = x;                          \
-        }                                                       \
-        b_desc = desc_encode(__cvta_generic_to_shared(b_smem)); \
-        b_desc |= desc_encode(128ll) << 16;                     \
-        b_desc |= desc_encode(256ll) << 32;                     \
-        b_desc |= 1ll << 46;                                    \
-    } while (0)
-
-// (2x1) tiles, each with (16x8) elements, packed in 8 bytes
-#define LOAD_B_N8K32_FP4()                                      \
-    do                                                          \
-    {                                                           \
-        for (uint32_t k = 0; k < 2; k++)                        \
-        {                                                       \
-            uint32_t row = k * 16 + tid % 16 * 2;               \
-            uint32_t col = tid / 16;                            \
-            uint8_t x = 0;                                      \
-            if (tid % 16 < 8)                                   \
-            {                                                   \
-                uint8_t lo = b[col * K + row] >> 2 & 0xf;       \
-                uint8_t hi = b[col * K + row + 1] >> 2 & 0xf;   \
-                x = lo | hi << 4;                               \
-            }                                                   \
-            b_smem[k * 128 + tid] = x;                          \
-        }                                                       \
-        b_desc = desc_encode(__cvta_generic_to_shared(b_smem)); \
-        b_desc |= desc_encode(128ll) << 16;                     \
-        b_desc |= desc_encode(256ll) << 32;                     \
-        b_desc |= 1ll << 46;                                    \
-    } while (0)
-
-// (2x1) tiles, each with (32x8) elements
-#define LOAD_B_N8K64_FP4()                                      \
-    do                                                          \
-    {                                                           \
-        for (uint32_t k = 0; k < 2; k++)                        \
-        {                                                       \
-            uint32_t row = k * 32 + tid % 16 * 2;               \
-            uint32_t col = tid / 16;                            \
-            b_smem[k * 128 + tid] = b[col * K / 2 + row / 2];   \
-        }                                                       \
-        b_desc = desc_encode(__cvta_generic_to_shared(b_smem)); \
-        b_desc |= desc_encode(128ll) << 16;                     \
-        b_desc |= desc_encode(256ll) << 32;                     \
-        b_desc |= 1ll << 46;                                    \
-    } while (0)
-
-#define LOAD_D_M128N8()                                                                 \
-    do                                                                                  \
-    {                                                                                   \
-        uint32_t d_frag[8];                                                             \
-        for (uint32_t i = 0; i < 8; i++)                                                \
-        {                                                                               \
-            uint32_t row = tid;                                                         \
-            uint32_t col = i;                                                           \
-            d_frag[i] = d[row * N + col];                                               \
-        }                                                                               \
-        asm volatile("tcgen05.st.sync.aligned.32x32b.x8.b32 "                           \
-                     "[%0], {%1, %2, %3, %4, %5, %6, %7, %8};"                          \
-                     :                                                                  \
-                     : "r"(d_tmem_addr + ((warpid * 32) << 16)),                        \
-                       "r"(d_frag[0]), "r"(d_frag[1]), "r"(d_frag[2]), "r"(d_frag[3]),  \
-                       "r"(d_frag[4]), "r"(d_frag[5]), "r"(d_frag[6]), "r"(d_frag[7])); \
-        asm volatile("tcgen05.wait::st.sync.aligned;");                                 \
-    } while (0)
-
-#define LOAD_D_M64N8()                                           \
-    do                                                           \
-    {                                                            \
-        uint32_t d_frag[4];                                      \
-        for (uint32_t i = 0; i < 4; i++)                         \
-        {                                                        \
-            uint32_t row = warpid * 16 + i / 2 * 8 + laneid / 4; \
-            uint32_t col = laneid % 4 * 2 + i % 2;               \
-            d_frag[i] = d[row * N + col];                        \
-        }                                                        \
-        asm volatile("tcgen05.st.sync.aligned.16x256b.x1.b32 "   \
-                     "[%0], {%1, %2, %3, %4};"                   \
-                     :                                           \
-                     : "r"(d_tmem_addr + ((warpid * 32) << 16)), \
-                       "r"(d_frag[0]), "r"(d_frag[1]),           \
-                       "r"(d_frag[2]), "r"(d_frag[3]));          \
-        asm volatile("tcgen05.wait::st.sync.aligned;");          \
-    } while (0)
-
-#define STORE_D_M128N8()                                                                   \
-    do                                                                                     \
-    {                                                                                      \
-        uint32_t d_frag[8];                                                                \
-        asm volatile("tcgen05.ld.sync.aligned.32x32b.x8.b32 "                              \
-                     "{%0, %1, %2, %3, %4, %5, %6, %7}, [%8];"                             \
-                     : "=r"(d_frag[0]), "=r"(d_frag[1]), "=r"(d_frag[2]), "=r"(d_frag[3]), \
-                       "=r"(d_frag[4]), "=r"(d_frag[5]), "=r"(d_frag[6]), "=r"(d_frag[7])  \
-                     : "r"(d_tmem_addr + ((warpid * 32) << 16)));                          \
-        asm volatile("tcgen05.wait::ld.sync.aligned;");                                    \
-        for (uint32_t i = 0; i < 8; i++)                                                   \
-        {                                                                                  \
-            uint32_t row = tid;                                                            \
-            uint32_t col = i;                                                              \
-            d[row * N + col] = d_frag[i];                                                  \
-        }                                                                                  \
-    } while (0)
-
-#define STORE_D_M64N8()                                           \
-    do                                                            \
-    {                                                             \
-        uint32_t d_frag[4];                                       \
-        asm volatile("tcgen05.ld.sync.aligned.16x256b.x1.b32 "    \
-                     "{%0, %1, %2, %3}, [%4];"                    \
-                     : "=r"(d_frag[0]), "=r"(d_frag[1]),          \
-                       "=r"(d_frag[2]), "=r"(d_frag[3])           \
-                     : "r"(d_tmem_addr + ((warpid * 32) << 16))); \
-        asm volatile("tcgen05.wait::ld.sync.aligned;");           \
-        for (uint32_t i = 0; i < 4; i++)                          \
-        {                                                         \
-            uint32_t row = warpid * 16 + i / 2 * 8 + laneid / 4;  \
-            uint32_t col = laneid % 4 * 2 + i % 2;                \
-            d[row * N + col] = d_frag[i];                         \
-        }                                                         \
-        __syncthreads();                                          \
-    } while (0)
-
-#define LOAD_SFA_M128SFK1()                                                          \
-    do                                                                               \
-    {                                                                                \
-        uint32_t sfa_frag[4];                                                        \
-        for (uint32_t i = 0; i < 4; i++)                                             \
-        {                                                                            \
-            uint32_t row = i * 32 + laneid;                                          \
-            sfa_frag[i] = sfa[row];                                                  \
-        }                                                                            \
-        asm volatile("tcgen05.st.sync.aligned.32x32b.x4.b32 [%0], {%1, %2, %3, %4};" \
-                     :                                                               \
-                     : "r"(sfa_tmem_addr + ((warpid * 32) << 16)),                   \
-                       "r"(sfa_frag[0]), "r"(sfa_frag[1]),                           \
-                       "r"(sfa_frag[2]), "r"(sfa_frag[3]));                          \
-        asm volatile("tcgen05.wait::st.sync.aligned;");                              \
-    } while (0)
-
-#define LOAD_SFA_M128SFK2()                                                          \
-    do                                                                               \
-    {                                                                                \
-        uint32_t sfa_frag[4];                                                        \
-        for (uint32_t i = 0; i < 4; i++)                                             \
-        {                                                                            \
-            uint32_t row = i * 32 + laneid;                                          \
-            sfa_frag[i] = *(uint16_t *)(sfa + row * 2);                              \
-        }                                                                            \
-        asm volatile("tcgen05.st.sync.aligned.32x32b.x4.b32 [%0], {%1, %2, %3, %4};" \
-                     :                                                               \
-                     : "r"(sfa_tmem_addr + ((warpid * 32) << 16)),                   \
-                       "r"(sfa_frag[0]), "r"(sfa_frag[1]),                           \
-                       "r"(sfa_frag[2]), "r"(sfa_frag[3]));                          \
-        asm volatile("tcgen05.wait::st.sync.aligned;");                              \
-    } while (0)
-
-#define LOAD_SFA_M128SFK4()                                                          \
-    do                                                                               \
-    {                                                                                \
-        uint32_t sfa_frag[4];                                                        \
-        for (uint32_t i = 0; i < 4; i++)                                             \
-        {                                                                            \
-            uint32_t row = i * 32 + laneid;                                          \
-            sfa_frag[i] = *(uint32_t *)(sfa + row * 4);                              \
-        }                                                                            \
-        asm volatile("tcgen05.st.sync.aligned.32x32b.x4.b32 [%0], {%1, %2, %3, %4};" \
-                     :                                                               \
-                     : "r"(sfa_tmem_addr + ((warpid * 32) << 16)),                   \
-                       "r"(sfa_frag[0]), "r"(sfa_frag[1]),                           \
-                       "r"(sfa_frag[2]), "r"(sfa_frag[3]));                          \
-        asm volatile("tcgen05.wait::st.sync.aligned;");                              \
-    } while (0)
-
-#define LOAD_SFB_N8SFK1()                                                \
-    do                                                                   \
-    {                                                                    \
-        uint32_t sfb_frag[1];                                            \
-        uint32_t col = laneid % 8;                                       \
-        sfb_frag[0] = sfb[col];                                          \
-        asm volatile("tcgen05.st.sync.aligned.32x32b.x1.b32 [%0], {%1};" \
-                     :                                                   \
-                     : "r"(sfb_tmem_addr + ((warpid * 32) << 16)),       \
-                       "r"(sfb_frag[0]));                                \
-        asm volatile("tcgen05.wait::st.sync.aligned;");                  \
-    } while (0)
-
-#define LOAD_SFB_N8SFK2()                                                \
-    do                                                                   \
-    {                                                                    \
-        uint32_t sfb_frag[1];                                            \
-        uint32_t col = laneid % 8;                                       \
-        sfb_frag[0] = *(uint16_t *)(sfb + col * 2);                      \
-        asm volatile("tcgen05.st.sync.aligned.32x32b.x1.b32 [%0], {%1};" \
-                     :                                                   \
-                     : "r"(sfb_tmem_addr + ((warpid * 32) << 16)),       \
-                       "r"(sfb_frag[0]));                                \
-        asm volatile("tcgen05.wait::st.sync.aligned;");                  \
-    } while (0)
-
-#define LOAD_SFB_N8SFK4()                                                \
-    do                                                                   \
-    {                                                                    \
-        uint32_t sfb_frag[1];                                            \
-        uint32_t col = laneid % 8;                                       \
-        sfb_frag[0] = *(uint32_t *)(sfb + col * 4);                      \
-        asm volatile("tcgen05.st.sync.aligned.32x32b.x1.b32 [%0], {%1};" \
-                     :                                                   \
-                     : "r"(sfb_tmem_addr + ((warpid * 32) << 16)),       \
-                       "r"(sfb_frag[0]));                                \
-        asm volatile("tcgen05.wait::st.sync.aligned;");                  \
-    } while (0)
-
-#define MMA(kind)                                                                                 \
-    do                                                                                            \
-    {                                                                                             \
-        if (tid == 0)                                                                             \
-        {                                                                                         \
-            const uint32_t mask[4] = {0, 0, 0, 0};                                                \
-            asm volatile(                                                                         \
-                "tcgen05.mma.cta_group::1.kind::" kind " [%0], %1, %2, %3, {%4, %5, %6, %7}, 1;"  \
-                :                                                                                 \
-                : "r"(d_tmem_addr), "l"(a_desc), "l"(b_desc), "r"(i_desc),                        \
-                  "r"(mask[0]), "r"(mask[1]), "r"(mask[2]), "r"(mask[3]));                        \
-            asm volatile(                                                                         \
-                "tcgen05.commit.cta_group::1.mbarrier::arrive::one.shared::cluster.b64 [%0];"     \
-                :                                                                                 \
-                : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier)));                         \
-        }                                                                                         \
-        asm volatile(                                                                             \
-            "{\n"                                                                                 \
-            ".reg .pred P1;\n"                                                                    \
-            "LAB_WAIT:\n"                                                                         \
-            "       mbarrier.try_wait.parity.shared::cta.b64 P1, [%0], %1;\n"                     \
-            "@P1    bra DONE;\n"                                                                  \
-            "       bra LAB_WAIT;\n"                                                              \
-            "DONE:\n"                                                                             \
-            "}\n"                                                                                 \
-            :                                                                                     \
-            : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier)), "r"(mma_barrier_phase_bit)); \
-        mma_barrier_phase_bit ^= 1;                                                               \
-    } while (0)
-
-#define MMA_WITH_BLOCK_SCALE(kind, block_size)                                                    \
-    do                                                                                            \
-    {                                                                                             \
-        if (tid == 0)                                                                             \
-        {                                                                                         \
-            asm volatile(                                                                         \
-                "tcgen05.mma.cta_group::1.kind::" kind ".block_scale." block_size " "             \
-                "[%0], %1, %2, %3, [%4], [%5], 1;"                                                \
-                :                                                                                 \
-                : "r"(d_tmem_addr), "l"(a_desc), "l"(b_desc), "r"(i_desc),                        \
-                  "r"(sfa_tmem_addr), "r"(sfb_tmem_addr));                                        \
-            asm volatile(                                                                         \
-                "tcgen05.commit.cta_group::1.mbarrier::arrive::one.shared::cluster.b64 [%0];"     \
-                :                                                                                 \
-                : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier)));                         \
-        }                                                                                         \
-        asm volatile(                                                                             \
-            "{\n"                                                                                 \
-            ".reg .pred P1;\n"                                                                    \
-            "LAB_WAIT:\n"                                                                         \
-            "       mbarrier.try_wait.parity.shared::cta.b64 P1, [%0], %1;\n"                     \
-            "@P1    bra DONE;\n"                                                                  \
-            "       bra LAB_WAIT;\n"                                                              \
-            "DONE:\n"                                                                             \
-            "}\n"                                                                                 \
-            :                                                                                     \
-            : "r"((uint32_t)__cvta_generic_to_shared(&mma_barrier)), "r"(mma_barrier_phase_bit)); \
-        mma_barrier_phase_bit ^= 1;                                                               \
-    } while (0)
+template <int SF>
+__device__ void tcgen05_store_scales(uint32_t addr, const uint8_t *src,
+                                     uint32_t rows, uint32_t tid)
+{
+    for (uint32_t col = 0; col < (rows + 31) / 32; ++col)
+    {
+        uint32_t row = col * 32 + tid % 32;
+        uint32_t word = 0;
+        if (row < rows)
+            for (uint32_t k = 0; k < SF; ++k)
+                word |= uint32_t(src[row * SF + k]) << (k * 8);
+        uint32_t dst = addr + ((tid / 32 * 32) << 16) + col;
+        asm volatile("tcgen05.st.sync.aligned.32x32b.x1.b32 [%0], {%1};" ::"r"(dst), "r"(word));
+    }
+    asm volatile("tcgen05.wait::st.sync.aligned;");
+}

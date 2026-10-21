@@ -2,6 +2,12 @@ import ctypes
 from pathlib import Path
 
 from torch.utils.cpp_extension import load
+from mmasim.nv_ptx.isa_common import nv_shape_to_mnk
+from mmasim.nv_ptx.isa_mma import blackwell_mma_shape_and_type
+from mmasim.nv_ptx.isa_tcgen05mma import (
+    blackwell_tcgen05mma_shape_and_type,
+    blackwell_tcgen05mma_block_scale_shape_and_type,
+)
 from . import MMA, TCGen05MMA, TCGen05MMABlockScale
 
 dir = Path(__file__).with_name("kernels")
@@ -14,119 +20,41 @@ kernel_path = load(
 )
 lib = ctypes.CDLL(kernel_path)
 
-# sm_80 f64
-lib.mma_m8n8k4_f64_f64_f64_f64.argtypes = [ctypes.c_void_p] * 4
-# sm_80 tf32
-lib.mma_m16n8k8_f32_tf32_tf32_f32.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k4_f32_tf32_tf32_f32.argtypes = [ctypes.c_void_p] * 4
-# sm_80 f16
-lib.mma_m16n8k16_f32_f16_f16_f32.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k16_f16_f16_f16_f16.argtypes = [ctypes.c_void_p] * 4
-# sm_80 bf16
-lib.mma_m16n8k16_f32_bf16_bf16_f32.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k8_f32_bf16_bf16_f32.argtypes = [ctypes.c_void_p] * 4
-# sm_75 f16
-lib.mma_m16n8k8_f32_f16_f16_f32.argtypes = [ctypes.c_void_p] * 4
-lib.mma_m16n8k8_f16_f16_f16_f16.argtypes = [ctypes.c_void_p] * 4
-
-# sm_100a tf32
-lib.tcgen05mma_m64n8k8_f32_tf32_tf32.argtypes = [ctypes.c_void_p] * 3
-# sm_100a f16 and bf16
-lib.tcgen05mma_m64n8k16_f32_f16_f16.argtypes = [ctypes.c_void_p] * 3
-lib.tcgen05mma_m64n8k16_f32_bf16_bf16.argtypes = [ctypes.c_void_p] * 3
-lib.tcgen05mma_m64n8k16_f16_f16_f16.argtypes = [ctypes.c_void_p] * 3
-# sm_100a fp8 f32_output
-lib.tcgen05mma_m64n8k32_f32_e5m2_e5m2.argtypes = [ctypes.c_void_p] * 3
-lib.tcgen05mma_m64n8k32_f32_e4m3_e4m3.argtypes = [ctypes.c_void_p] * 3
-# sm_100a fp6 and fp4 f32_output
-lib.tcgen05mma_m64n8k32_f32_e3m2_e3m2.argtypes = [ctypes.c_void_p] * 3
-lib.tcgen05mma_m64n8k32_f32_e2m3_e2m3.argtypes = [ctypes.c_void_p] * 3
-lib.tcgen05mma_m64n8k32_f32_e2m1_e2m1.argtypes = [ctypes.c_void_p] * 3
-# sm_100a fp8 f16_output
-lib.tcgen05mma_m64n8k32_f16_e5m2_e5m2.argtypes = [ctypes.c_void_p] * 3
-lib.tcgen05mma_m64n8k32_f16_e4m3_e4m3.argtypes = [ctypes.c_void_p] * 3
-# sm_100a fp6 and fp4 f16_output
-lib.tcgen05mma_m64n8k32_f16_e3m2_e3m2.argtypes = [ctypes.c_void_p] * 3
-lib.tcgen05mma_m64n8k32_f16_e2m3_e2m3.argtypes = [ctypes.c_void_p] * 3
-lib.tcgen05mma_m64n8k32_f16_e2m1_e2m1.argtypes = [ctypes.c_void_p] * 3
-
-# sm_100a mxf8f6f4
-lib.tcgen05mma_m128n8k32_block32_f32_e5m2_e5m2_ue8m0.argtypes = [ctypes.c_void_p] * 5
-lib.tcgen05mma_m128n8k32_block32_f32_e4m3_e4m3_ue8m0.argtypes = [ctypes.c_void_p] * 5
-# sm_100a mxf8f6f4 fp6 and fp4
-lib.tcgen05mma_m128n8k32_block32_f32_e3m2_e3m2_ue8m0.argtypes = [ctypes.c_void_p] * 5
-lib.tcgen05mma_m128n8k32_block32_f32_e2m3_e2m3_ue8m0.argtypes = [ctypes.c_void_p] * 5
-lib.tcgen05mma_m128n8k32_block32_f32_e2m1_e2m1_ue8m0.argtypes = [ctypes.c_void_p] * 5
-# sm_100a mxf4 and nvf4
-lib.tcgen05mma_m128n8k64_block32_f32_e2m1_e2m1_ue8m0.argtypes = [ctypes.c_void_p] * 5
-lib.tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue8m0.argtypes = [ctypes.c_void_p] * 5
-lib.tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue4m3.argtypes = [ctypes.c_void_p] * 5
-
-mma_cuda_kernels = {
-    # sm_80 f64
-    "m8n8k4.f64.f64.f64.f64": lib.mma_m8n8k4_f64_f64_f64_f64,
-    # sm_80 tf32
-    "m16n8k8.f32.tf32.tf32.f32": lib.mma_m16n8k8_f32_tf32_tf32_f32,
-    "m16n8k4.f32.tf32.tf32.f32": lib.mma_m16n8k4_f32_tf32_tf32_f32,
-    # sm_80 f16
-    "m16n8k16.f32.f16.f16.f32": lib.mma_m16n8k16_f32_f16_f16_f32,
-    "m16n8k16.f16.f16.f16.f16": lib.mma_m16n8k16_f16_f16_f16_f16,
-    # sm_80 bf16
-    "m16n8k16.f32.bf16.bf16.f32": lib.mma_m16n8k16_f32_bf16_bf16_f32,
-    "m16n8k8.f32.bf16.bf16.f32": lib.mma_m16n8k8_f32_bf16_bf16_f32,
-    # sm_75 f16
-    "m16n8k8.f32.f16.f16.f32": lib.mma_m16n8k8_f32_f16_f16_f32,
-    "m16n8k8.f16.f16.f16.f16": lib.mma_m16n8k8_f16_f16_f16_f16,
-}
-tcgen05mma_cuda_kernels = {
-    # sm_100a tf32
-    "m64n8k8.f32.tf32.tf32": lib.tcgen05mma_m64n8k8_f32_tf32_tf32,
-    # sm_100a f16 and bf16
-    "m64n8k16.f32.f16.f16": lib.tcgen05mma_m64n8k16_f32_f16_f16,
-    "m64n8k16.f32.bf16.bf16": lib.tcgen05mma_m64n8k16_f32_bf16_bf16,
-    "m64n8k16.f16.f16.f16": lib.tcgen05mma_m64n8k16_f16_f16_f16,
-    # sm_100a fp8 f32_output
-    "m64n8k32.f32.e5m2.e5m2": lib.tcgen05mma_m64n8k32_f32_e5m2_e5m2,
-    "m64n8k32.f32.e4m3.e4m3": lib.tcgen05mma_m64n8k32_f32_e4m3_e4m3,
-    # sm_100a fp6 and fp4 f32_output
-    "m64n8k32.f32.e3m2.e3m2": lib.tcgen05mma_m64n8k32_f32_e3m2_e3m2,
-    "m64n8k32.f32.e2m3.e2m3": lib.tcgen05mma_m64n8k32_f32_e2m3_e2m3,
-    "m64n8k32.f32.e2m1.e2m1": lib.tcgen05mma_m64n8k32_f32_e2m1_e2m1,
-    # sm_100a fp8 f16_output
-    "m64n8k32.f16.e5m2.e5m2": lib.tcgen05mma_m64n8k32_f16_e5m2_e5m2,
-    "m64n8k32.f16.e4m3.e4m3": lib.tcgen05mma_m64n8k32_f16_e4m3_e4m3,
-    # sm_100a fp6 and fp4 f16_output
-    "m64n8k32.f16.e3m2.e3m2": lib.tcgen05mma_m64n8k32_f16_e3m2_e3m2,
-    "m64n8k32.f16.e2m3.e2m3": lib.tcgen05mma_m64n8k32_f16_e2m3_e2m3,
-    "m64n8k32.f16.e2m1.e2m1": lib.tcgen05mma_m64n8k32_f16_e2m1_e2m1,
-}
-tcgen05mma_block_scale_cuda_kernels = {
-    # sm_100a mxf8f6f4
-    "m128n8k32.block32.f32.e5m2.e5m2.ue8m0": lib.tcgen05mma_m128n8k32_block32_f32_e5m2_e5m2_ue8m0,
-    "m128n8k32.block32.f32.e4m3.e4m3.ue8m0": lib.tcgen05mma_m128n8k32_block32_f32_e4m3_e4m3_ue8m0,
-    # sm_100a mxf8f6f4 fp6 and fp4
-    "m128n8k32.block32.f32.e3m2.e3m2.ue8m0": lib.tcgen05mma_m128n8k32_block32_f32_e3m2_e3m2_ue8m0,
-    "m128n8k32.block32.f32.e2m3.e2m3.ue8m0": lib.tcgen05mma_m128n8k32_block32_f32_e2m3_e2m3_ue8m0,
-    "m128n8k32.block32.f32.e2m1.e2m1.ue8m0": lib.tcgen05mma_m128n8k32_block32_f32_e2m1_e2m1_ue8m0,
-    # sm_100a mxf4 and nvf4
-    "m128n8k64.block32.f32.e2m1.e2m1.ue8m0": lib.tcgen05mma_m128n8k64_block32_f32_e2m1_e2m1_ue8m0,
-    "m128n8k64.block16.f32.e2m1.e2m1.ue8m0": lib.tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue8m0,
-    "m128n8k64.block16.f32.e2m1.e2m1.ue4m3": lib.tcgen05mma_m128n8k64_block16_f32_e2m1_e2m1_ue4m3,
-}
-
-mma_kernels = {
-    shape_and_type: MMA("Blackwell", shape_and_type, mma_cuda_kernels[shape_and_type])
-    for shape_and_type in mma_cuda_kernels
-}
-tcgen05mma_kernels = {
-    shape_and_type: TCGen05MMA(
-        "Blackwell", shape_and_type, tcgen05mma_cuda_kernels[shape_and_type]
+mma_kernels = {}
+for shape_and_type in blackwell_mma_shape_and_type:
+    kernel = lib.__getattr__(
+        f"mma_{shape_and_type.replace('.', '_').replace('::', '_')}"
     )
-    for shape_and_type in tcgen05mma_cuda_kernels
-}
-tcgen05mma_block_scale_kernels = {
-    shape_and_type: TCGen05MMABlockScale(
-        "Blackwell", shape_and_type, tcgen05mma_block_scale_cuda_kernels[shape_and_type]
+    kernel.argtypes = [ctypes.c_void_p] * 4
+    mma_kernels[shape_and_type] = MMA("Blackwell", shape_and_type, kernel)
+
+
+def _bind_shape(kernel, m, n, pointer_count):
+    """Bind runtime descriptor dimensions while keeping the common kernel ABI."""
+    kernel.argtypes = [ctypes.c_void_p] * pointer_count + [ctypes.c_uint32] * 2
+    kernel.restype = None
+
+    def bound(*pointers):
+        return kernel(*pointers, m, n)
+
+    bound.argtypes = kernel.argtypes[:pointer_count]
+    return bound
+
+
+tcgen05mma_kernels = {}
+for shape_and_type in blackwell_tcgen05mma_shape_and_type:
+    shape, type = shape_and_type.split(".", 1)
+    m, n, _ = nv_shape_to_mnk(shape)
+    kernel = lib.__getattr__(f"tcgen05mma_{type.replace('.', '_').replace('::', '_')}")
+    kernel = _bind_shape(kernel, m, n, 3)
+    tcgen05mma_kernels[shape_and_type] = TCGen05MMA("Blackwell", shape_and_type, kernel)
+
+tcgen05mma_block_scale_kernels = {}
+for shape_and_type in blackwell_tcgen05mma_block_scale_shape_and_type:
+    shape, type = shape_and_type.split(".", 1)
+    m, n, _ = nv_shape_to_mnk(shape)
+    kernel = lib.__getattr__(f"tcgen05mma_{type.replace('.', '_').replace('::', '_')}")
+    kernel = _bind_shape(kernel, m, n, 5)
+    tcgen05mma_block_scale_kernels[shape_and_type] = TCGen05MMABlockScale(
+        "Blackwell", shape_and_type, kernel
     )
-    for shape_and_type in tcgen05mma_block_scale_cuda_kernels
-}
