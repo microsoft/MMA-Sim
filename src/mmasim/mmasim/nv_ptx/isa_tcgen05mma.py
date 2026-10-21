@@ -11,21 +11,19 @@ from .isa_common import (
 # TODO: support tcgen05mma with .ws and .cta_group::2
 # TODO: support sm_103/sm_107
 
-_tcgen05_mn = [(m, n) for m in (64, 128) for n in range(8, 257, 8)]
+_tcgen05_mn = [(m, n) for m in [64, 128] for n in range(8, 257, 8)]
 blackwell_tcgen05mma_shape_and_type = (
     [f"m{m}n{n}k8.kind::tf32.f32.tf32.tf32" for m, n in _tcgen05_mn]
     + [
-        f"m{m}n{n}k16.kind::f16.{d_type}.{a_type}.{b_type}"
+        f"m{m}n{n}k16.kind::f16.f32.{ab_type}.{ab_type}"
         for m, n in _tcgen05_mn
-        for d_type in ("f32", "f16")
-        for a_type in ("f16", "bf16")
-        for b_type in ("f16", "bf16")
-        if d_type == "f32" or a_type == b_type == "f16"
+        for ab_type in ["f16", "bf16"]
     ]
+    + [f"m{m}n{n}k16.kind::f16.f16.f16.f16" for m, n in _tcgen05_mn]
     + [
         f"m{m}n{n}k32.kind::f8f6f4.{d_type}.{a_type}.{b_type}"
         for m, n in _tcgen05_mn
-        for d_type in ("f32", "f16")
+        for d_type in ["f32", "f16"]
         for a_type in f8f6f4_types
         for b_type in f8f6f4_types
     ]
@@ -47,11 +45,11 @@ blackwell_tcgen05mma_block_scale_shape_and_type = (
         for n in _tcgen05_block_scale_n
     ]
     + [
-        f"m128n{n}k64.kind::mxf4nvf4.block32.f32.e2m1.e2m1.f32.ue8m0"
+        f"m128n{n}k64.kind::mxf4nvf4.block32.f32.e2m1.e2m1.ue8m0"
         for n in _tcgen05_block_scale_n
     ]
     + [
-        f"m128n{n}k64.kind::mxf4nvf4.block16.f32.e2m1.e2m1.f32.{s_type}"
+        f"m128n{n}k64.kind::mxf4nvf4.block16.f32.e2m1.e2m1.{s_type}"
         for n in _tcgen05_block_scale_n
         for s_type in ["ue8m0", "ue4m3"]
     ]
