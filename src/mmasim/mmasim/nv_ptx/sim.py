@@ -3,6 +3,43 @@ import torch
 from . import isa_mma, isa_wgmma, isa_tcgen05mma
 from ..arithmetic import fma, fdpa
 
+_mma_F_bits = {
+    "Volta": 23,
+    "Turing": 24,
+    "Ampere": 24,
+    "Ada Lovelace": 24,
+    "Hopper": 25,
+    "Blackwell": 25,
+    "RTX Blackwell": 25,
+}
+_mma_L_max_bytes = {
+    "Volta": 4 * 2,
+    "Turing": 8 * 2,
+    "Ampere": 8 * 2,
+    "Ada Lovelace": 8 * 2,
+    "Hopper": 16 * 2,
+    "Blackwell": 16 * 2,
+    "RTX Blackwell": 16 * 2,
+}
+_mma_e_zero_for_fp16 = {
+    "Volta": -19,
+    "Turing": -20,
+    "Ampere": -20,
+    "Ada Lovelace": -20,
+    "Hopper": -21,
+    "Blackwell": -21,
+    "RTX Blackwell": -21,
+}
+_mma_e_zero_for_fp32 = {
+    "Volta": -131,  # meaningless for fp16 mma
+    "Turing": -132,  # meaningless for fp16 mma
+    "Ampere": -132,
+    "Ada Lovelace": -132,
+    "Hopper": -133,
+    "Blackwell": -133,
+    "RTX Blackwell": -133,
+}
+
 
 class MMA(isa_mma.MMA):
     def __init__(self, arch: str, shape_and_type: str):
@@ -10,42 +47,29 @@ class MMA(isa_mma.MMA):
         if self.a_type == torch.float64:
             self.arithmetic_op = fma.MMA_FMA()
         else:
+            F = _mma_F_bits[arch]
+            L_max = _mma_L_max_bytes[arch] // self.a_type.itemsize
+            is_fp16_output = self.d_type == torch.float16
+            rho = "RNE-FP16" if is_fp16_output else "RZ-FP32"
+            e_zero = (
+                _mma_e_zero_for_fp16[arch]
+                if is_fp16_output
+                else _mma_e_zero_for_fp32[arch]
+            )
+            # special cases
+            if (
+                self.arch == "Turing"
+                and self.shape_and_type in isa_mma.volta_mma_shape_and_type
+            ):  # fallback to Volta settings
+                F = 23
+                L_max = 4
+                e_zero = -19 if is_fp16_output else -131
             if self.arch == "Ada Lovelace" and self.a_type in [
                 torch.float8_e5m2,
                 torch.float8_e4m3fn,
-            ]:
+            ]:  # truncated to F=13
                 F = 13
-                rho = "RNE-FP16" if self.d_type == torch.float16 else "RZ-E8M13"
-            else:
-                F_table = {
-                    "Volta": 23,
-                    "Turing": 24,
-                    "Ampere": 24,
-                    "Ada Lovelace": 24,
-                    "Hopper": 25,
-                    "Blackwell": 25,
-                    "RTX Blackwell": 25,
-                }
-                F = F_table[arch]
-                if shape_and_type in isa_mma.volta_mma_shape_and_type:
-                    F = 23  # special case on Turing
-                rho = "RNE-FP16" if self.d_type == torch.float16 else "RZ-FP32"
-            L_max_bytes = {
-                "Volta": 4 * 2,
-                "Turing": 8 * 2,
-                "Ampere": 8 * 2,
-                "Ada Lovelace": 8 * 2,
-                "Hopper": 16 * 2,
-                "Blackwell": 16 * 2,
-                "RTX Blackwell": 16 * 2,
-            }
-            L_max = L_max_bytes[arch] // self.a_type.itemsize
-            if self.arch == "Volta":
-                e_zero = -20 if self.c_type == torch.float16 else -131
-            elif self.arch in ["Turing", "Ampere", "Ada Lovelace"]:
-                e_zero = -21 if self.c_type == torch.float16 else -132
-            else:  # Hopper, Blackwell, RTX Blackwell
-                e_zero = -21 if self.c_type == torch.float16 else -133
+                rho = "RNE-FP16" if is_fp16_output else "RZ-E8M13"
             self.arithmetic_op = fdpa.MMA_T_FDPA(
                 F, rho, L_max, e_zero, self.a_type_ptx, self.b_type_ptx
             )
@@ -113,7 +137,7 @@ class WGMMA(isa_wgmma.WGMMA):
             F = 25
             rho = "RNE-FP16" if self.d_type == torch.float16 else "RZ-FP32"
         L_max = 32 // self.a_type.itemsize
-        e_zero = -21 if self.c_type == torch.float16 else -133
+        e_zero = -21 if self.d_type == torch.float16 else -133
         self.arithmetic_op = fdpa.MMA_T_FDPA(
             F, rho, L_max, e_zero, self.a_type_ptx, self.b_type_ptx
         )
@@ -136,7 +160,7 @@ class TCGen05MMA(isa_tcgen05mma.TCGen05MMA):
         F = 25
         rho = "RNE-FP16" if self.d_type == torch.float16 else "RZ-FP32"
         L_max = 32 // self.a_type.itemsize
-        e_zero = -21 if self.c_type == torch.float16 else -133
+        e_zero = -21 if self.d_type == torch.float16 else -133
         self.arithmetic_op = fdpa.MMA_T_FDPA(
             F, rho, L_max, e_zero, self.a_type_ptx, self.b_type_ptx
         )
