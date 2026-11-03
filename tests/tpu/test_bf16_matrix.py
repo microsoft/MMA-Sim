@@ -14,6 +14,11 @@ def instruction(setup):
 class MeasuredMatrixTests(unittest.TestCase):
     def test_captured_shapes_matrix_outputs(self):
         fixture = json.loads((BASE / "v6-instruction-measured.json").read_text())
+        self.assertEqual(len(fixture["cases"]), 4)
+        self.assertEqual(
+            sum(len(r["expected"]) * len(r["expected"][0]) for r in fixture["cases"]),
+            12288,
+        )
         for row in fixture["cases"]:
             _, k, n = row["shape"]
             bank = fixture["banks"][str(k)]

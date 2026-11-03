@@ -6,7 +6,7 @@ FP8: K256 cross-half DP8 partials use Emax-8 RTZ and p9 RTZ;
 No physical E7M8 exponent encoding or compiler-selected outer schedule is assumed.
 """
 
-from ._bits import add32, dot_bits, unpack, shift_round, pack32
+from ._bits import add32, bf16_partial, unpack, shift_round, pack32
 
 
 def fold(values):
@@ -19,7 +19,7 @@ def fold(values):
 def block256(a, b, mode="cross128"):
     a = list(a) + [0] * (256 - len(a))
     b = list(b) + [0] * (256 - len(b))
-    p = [dot_bits(a[i : i + 4], b[i : i + 4]) for i in range(0, 256, 4)]
+    p = [bf16_partial(a[i : i + 4], b[i : i + 4]) for i in range(0, 256, 4)]
     if mode == "independent128":
         lo = fold([add32(p[i], p[i + 1]) for i in range(0, 32, 2)])
         hi = fold([add32(p[i], p[i + 1]) for i in range(32, 64, 2)])
@@ -43,20 +43,28 @@ def cross_block256(a, b):
         for h in (0, 4):
             aa = a[i + h : i + h + 4] + a[i + h + 128 : i + h + 132]
             bb = b[i + h : i + h + 4] + b[i + h + 128 : i + h + 132]
-            pair.append(dot_bits(aa, bb, group=8, fraction=27, sticky=False))
+            pair.append(bf16_partial(aa, bb, fraction=27, sticky=False))
         acc = add32(acc, add32(pair[0], pair[1]))
     return acc
+
+
+def pair_chain(a, b, *, fraction=26, sticky=True):
+    parts = [
+        bf16_partial(a[i : i + 4], b[i : i + 4], fraction=fraction, sticky=sticky)
+        for i in range(0, len(a), 4)
+    ]
+    return fold(add32(parts[i], parts[i + 1]) for i in range(0, len(parts), 2))
 
 
 def bf16_dot(a, b, arch):
     a, b = [x >> 16 for x in a], [x >> 16 for x in b]
     if arch == "TPU-v5e":
-        return dot_bits(a, b, reduction="pair_chain")
+        return pair_chain(a, b)
     if arch == "TPU-v6e":
         return block256(a, b, "independent128" if len(a) == 128 else "cross128")
     if len(a) == 256:
         return cross_block256(a, b)
-    return dot_bits(a, b, fraction=27, sticky=False, reduction="pair_chain")
+    return pair_chain(a, b, fraction=27, sticky=False)
 
 
 def quantize_p9(n, e, mode):

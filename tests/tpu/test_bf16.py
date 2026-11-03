@@ -1,6 +1,7 @@
 """Generation-specific prepared instruction tiles and saved v7 hardware witnesses."""
 
 import json
+from collections import Counter
 from pathlib import Path
 import unittest
 import torch
@@ -31,7 +32,11 @@ def make(arch, k):
 
 class GenerationTests(unittest.TestCase):
     def test_v7_hardware_witnesses(self):
-        for row in json.loads((BASE / "v7-instruction-measured.json").read_text()):
+        witnesses = json.loads((BASE / "v7-instruction-measured.json").read_text())
+        self.assertEqual(
+            Counter(row["shape"][1] for row in witnesses), {128: 12, 256: 16}
+        )
+        for row in witnesses:
             k = row["shape"][1]
             op = make("TPU-v7", k)
             self.assertEqual(
@@ -66,9 +71,9 @@ class GenerationTests(unittest.TestCase):
             )
 
     def test_v5_saved_schedule(self):
-        for r in json.loads((BASE / "v5-shape-measured.json").read_text()):
-            if r["k"] % 128:
-                continue
+        witnesses = json.loads((BASE / "v5-shape-measured.json").read_text())
+        self.assertEqual(sorted(r["k"] for r in witnesses), [512, 1024, 2048])
+        for r in witnesses:
             acc = 0
             op = make("TPU-v5e", 128)
             for start in range(0, r["k"], 128):

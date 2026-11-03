@@ -107,3 +107,37 @@ checked with exact integer controls, not presented as new hardware captures.
 
 BF16 fixtures cover all three generations, v6e matrix transport and explicit
 composition of saved v5e longer-K results. See [fixture provenance](../../../../tests/tpu/README.md).
+
+### Saved-hardware replay results
+
+The following counts describe the fixtures committed in `tests/tpu/trace_data/`,
+not every experiment in the broader characterization campaign. All comparisons
+use raw FP32 output encodings.
+
+| Architecture / input | Captured coverage | Compared results | Mismatches |
+|---|---|---:|---:|
+| v5e BF16 | K=512,1024,2048; explicit composition of K128 instruction groups | 3 dot results | **0** |
+| v6e BF16 | M/K/N = 128/128/128, 128/256/128, 128/256/256, 257/256/128; saved output subsets | 12,288 output entries from 4 captures | **0** |
+| v7 BF16 | M16 K128 N128 | 12 dot witnesses | **0** |
+| v7 BF16 | M16 K256 N256 | 16 dot witnesses | **0** |
+| v7 E4M3FN | M16 K256 N256, replayed with inactive M32 rows padded | 7,740 dot observations | **0** |
+| v7 E5M2 | M16 K256 N256, replayed with inactive M32 rows padded | 9,664 dot observations | **0** |
+
+The v6e matrix subsets contain repeated diagnostic rows/columns; v7 BF16 witnesses
+include multiple columns from the same capture. These counts are comparison
+units, not counts of independent random inputs. Full matrix transport, independent
+stream/row controls and invalid-input checks are covered by the test suite in
+addition to the hardware comparisons above. Tests assert fixture counts to avoid
+reporting success after accidentally dropping captured cases.
+
+### Relationship to shared arithmetic
+
+The backend implements the shared `MMAOperation` interface and reuses
+`arithmetic.helper.dtype_subnormal_exponent` for input-format validation.
+Its integer arithmetic preserves the TPU-specific DP-output rounding and
+accumulation stages. The upstream `t_fdpa` fuses C with the products before
+alignment; TPU BF16 rounds DP outputs before the FP32 merge/add, and TPU FP8
+has separate p9 RTZ partial and p9 RNE accumulator stages. The upstream
+`ftz_add` flushes the result, but does not itself flush its input operands and
+preserves an underflowed result's sign. These functions are therefore not direct
+substitutes for the TPU arithmetic policy.
