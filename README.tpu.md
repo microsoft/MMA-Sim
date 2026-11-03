@@ -1,6 +1,6 @@
 # TPU instruction-group numerical models
 
-This extension adds BF16 models for TPU v5e, v6e and v7, and E4M3FN/E5M2
+The TPU backend provides BF16 models for TPU v5e, v6e and v7, and E4M3FN/E5M2
 models for TPU v7. It follows the architecture/instruction constructor and
 PyTorch callable interface used by the GPU backends.
 
@@ -77,7 +77,7 @@ FP8 array-local p9 additions are distinct from these external FP32 additions.
 
 ## API scope
 
-The first version accepts finite, already-quantized **CPU** tensors, including
+The API accepts finite, already-quantized **CPU** tensors, including
 FP32 tensors whose values are exactly representable in the selected input
 format. It rejects nonrepresentable inputs, NaN/Inf operands, nonzero C and
 autograd tensors. Subnormal BF16 operands follow the stated FTZ policy.
@@ -85,8 +85,8 @@ C is optional; when supplied, it must be a zero FP32 tensor of output shape.
 
 The simulator models arithmetic, not cycle timing or persistent load queues.
 Outer K reductions, explicit vector additions, padding and MXU assignment are
-caller operations. This branch does not include HLO profile lookup, LLO/binary
-execution, training integration, RTL or models of other accelerator vendors.
+caller operations. Instruction groups are evaluated directly, without HLO profile lookup or
+LLO/binary execution.
 
 ## Validation
 
