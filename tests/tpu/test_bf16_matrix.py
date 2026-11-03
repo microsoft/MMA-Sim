@@ -4,7 +4,7 @@ from pathlib import Path
 import torch
 from mmasim.tpu import MMA, add_fp32_bits as add32
 
-BASE = Path(__file__).parent
+BASE = Path(__file__).parent / "trace_data"
 
 
 def instruction(setup):

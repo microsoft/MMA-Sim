@@ -46,4 +46,4 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path)
     args = parser.parse_args()
-    build(args.source, Path(__file__).with_name("v7-fp8-measured.npz"))
+    build(args.source, (Path(__file__).parent / "trace_data" / "v7-fp8-measured.npz"))

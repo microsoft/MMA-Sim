@@ -23,7 +23,8 @@ def words(values):
 class FP8Tests(unittest.TestCase):
     def test_all_native_observations(self):
         with np.load(
-            Path(__file__).with_name("v7-fp8-measured.npz"), allow_pickle=False
+            (Path(__file__).parent / "trace_data" / "v7-fp8-measured.npz"),
+            allow_pickle=False,
         ) as data:
             for fmt, count in [("e4m3", 7740), ("e5m2", 9664)]:
                 op = make(fmt)
@@ -40,7 +41,8 @@ class FP8Tests(unittest.TestCase):
 
     def test_matrix_transport_native_rows_and_padding(self):
         with np.load(
-            Path(__file__).with_name("v7-fp8-measured.npz"), allow_pickle=False
+            (Path(__file__).parent / "trace_data" / "v7-fp8-measured.npz"),
+            allow_pickle=False,
         ) as data:
             for fmt in ["e4m3", "e5m2"]:
                 op = make(fmt)

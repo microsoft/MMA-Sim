@@ -7,7 +7,7 @@ import torch
 from mmasim.tpu import MMA
 from mmasim.tpu import add_fp32_bits as add32
 
-BASE = Path(__file__).parent
+BASE = Path(__file__).parent / "trace_data"
 OP = "vmatmul.mubr.bf16.gmra"
 
 

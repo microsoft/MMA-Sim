@@ -106,4 +106,4 @@ interface with inactive rows padded. Independent M32 rows are additionally
 checked with exact integer controls, not presented as new hardware captures.
 
 BF16 fixtures cover all three generations, v6e matrix transport and explicit
-composition of saved v5e longer-K results. See [fixture provenance](tests/tpu/README.md).
+composition of saved v5e longer-K results. See [fixture provenance](../../../../tests/tpu/README.md).

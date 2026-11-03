@@ -1,4 +1,11 @@
-# Hardware fixtures
+# TPU tests and hardware fixtures
+
+Captured data lives in `trace_data/`; test modules and fixture extraction
+scripts live alongside this README. Run tests from the repository root:
+
+```sh
+python -m unittest discover -s tests/tpu -v
+```
 
 Expected values in these fixtures are saved device outputs, not values generated
 by the simulator under test. All operand words are FP32 encodings of exact BF16
@@ -6,10 +13,10 @@ or FP8 values; this avoids a dependency on host FP8 serialization conventions.
 
 | Fixture | Origin and use |
 |---|---|
-| `v5-shape-measured.json` | Preserved v5e shape-boundary dot outputs; complete K128 multiples are replayed with explicit outer FP32 additions. |
-| `v6-instruction-measured.json` | v6e schedule-boundary capture, M/K/N 128/128/128, 128/256/128, 128/256/256 and 257/256/128. Input banks and row/column indices reconstruct 12,288 saved output entries. |
-| `v7-instruction-measured.json` | 28 v7 BF16 dot witnesses from native M16 K128/K256 captures: dense, cross-cancellation and tile-boundary inputs. |
-| `v7-fp8-measured.npz` | 17,404 v7 native M16 K256 N256 observations from `A-{e4m3,e5m2}-jax-16-256-256-core/batch-*.npz`. |
+| [`v5-shape-measured.json`](trace_data/v5-shape-measured.json) | Preserved v5e shape-boundary dot outputs; complete K128 multiples are replayed with explicit outer FP32 additions. |
+| [`v6-instruction-measured.json`](trace_data/v6-instruction-measured.json) | v6e schedule-boundary capture, M/K/N 128/128/128, 128/256/128, 128/256/256 and 257/256/128. Input banks and row/column indices reconstruct 12,288 saved output entries. |
+| [`v7-instruction-measured.json`](trace_data/v7-instruction-measured.json) | 28 v7 BF16 dot witnesses from native M16 K128/K256 captures: dense, cross-cancellation and tile-boundary inputs. |
+| [`v7-fp8-measured.npz`](trace_data/v7-fp8-measured.npz) | 17,404 v7 native M16 K256 N256 observations from `A-{e4m3,e5m2}-jax-16-256-256-core/batch-*.npz`. |
 
 The repeated diagnostic rows/columns are preserved or compacted losslessly;
 they are not counted as independent random trials. FP8 source labels retain the

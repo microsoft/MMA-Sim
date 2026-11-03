@@ -35,6 +35,6 @@ if __name__ == "__main__":
                             expected=int(out[0, 0, 0, col]),
                         )
                     )
-    target = Path(__file__).with_name("v7-instruction-measured.json")
+    target = Path(__file__).parent / "trace_data" / "v7-instruction-measured.json"
     target.write_text(json.dumps(cases, separators=(",", ":")) + "\n")
     print(len(cases), "hardware witnesses ->", target)

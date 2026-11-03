@@ -15,7 +15,7 @@ def main():
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path(__file__).with_name("v6-instruction-measured.json"),
+        default=(Path(__file__).parent / "trace_data" / "v6-instruction-measured.json"),
     )
     args = parser.parse_args()
     out = {
