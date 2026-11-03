@@ -407,7 +407,7 @@ def gtr_fdpa(
     e_max = torch.max(e_dot, e_c)
     s_dot = torch.floor(s_dot * pow2(e_dot - e_max + (F2 + 1))) * 2.0 ** -(F2 + 1)
     s_c = torch.floor(s_c * pow2(e_c - e_max + F)) * 2.0**-F
-    s_c[e_c < e_max - F - 1] = 0.0
+    s_c[(e_c < e_max - F - 1) & s_c.isfinite()] = 0.0
     s_dot, e_max = frexp_and_normalize((s_dot + s_c) * pow2(e_max), e_subnormal=-126)
     s_dot = torch.floor(s_dot * 2.0**F2) * 2.0**-F2
     return ldexp_and_normalize(s_dot, e_max, rho)
