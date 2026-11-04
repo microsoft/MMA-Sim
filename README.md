@@ -83,12 +83,6 @@ for _ in range(1000):
 
 Additionally, you can run test scripts in [tests/equivalence](tests/equivalence) to verify the equivalence for MMA instructions on your GPU.
 
-## TPU instruction models
-
-MMA-Sim supports prepared TPU instruction groups for v5e/v6e/v7 BF16 and
-v7 FP8 (E4M3FN/E5M2). See [the TPU API and numerical rules](src/mmasim/mmasim/tpu/README.md)
-and [hardware fixture provenance](tests/tpu/README.md).
-
 ## Citation
 
 ```

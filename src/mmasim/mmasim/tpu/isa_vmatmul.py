@@ -6,15 +6,61 @@ required because vmatmul alone does not specify its arithmetic mode.
 """
 
 import torch
-from .. import MMAOperation
+from .. import DPOperation
+
+BF16_INSTRUCTIONS: dict[str, list[str]] = {
+    "TPU-v5e": ["vmatmul.bf16.gmra", "vmatmul.bf16.vlgmr.msra.gmra"],
+    "TPU-v6e": ["vmatmul.mubr.bf16.gmra", "vmatmul.mubr.bf16.vlgmr.msra.gmra"],
+    "TPU-v7": [
+        "vmatmul.mubr.bf16.gmra",
+        "vmatmul.mubr.bf16.vlgmr.msra.gmra",
+        "vmatmul.mubr.bf16.vlgmr.msra.gmra.mrb[0]",
+        "vmatmul.mubr.bf16.vlgmr2.msra.gmra.mrb",
+        "vmatmul.mubr.bf16.msra.gmra.mrb",
+    ],
+}
+
+FP8_INSTRUCTIONS: dict[str, list[str]] = {
+    "e4m3fn": [
+        "vmatmul.mubr.f8e4m3fn.gmra",
+        "vmatmul.mubr.f8e4m3fn.vlgmr.msra.gmra.mrb[0]",
+    ],
+    "e5m2": [
+        "vmatmul.mubr.f8e5m2.gmra",
+        "vmatmul.mubr.f8e5m2.vlgmr.msra.gmra.mrb[0]",
+    ],
+}
 
 
-class MMA(MMAOperation):
-    def __init__(self, arch: str, instruction: str, *, weight_load: str, shape=None):
+class MMA(DPOperation):
+    """Captured instruction descriptor, with logical operand shapes in M,K,N order."""
+
+    arch: str
+    instruction: str
+    weight_load: str
+    format: str
+    mxu: str | None
+    m: int
+    k: int
+    n: int
+    groups: int
+    shape: tuple[int, int, int]
+    a_shape: tuple[int, ...]
+    b_shape: tuple[int, ...]
+    d_shape: tuple[int, ...]
+
+    def __init__(
+        self,
+        arch: str,
+        instruction: str,
+        *,
+        weight_load: str,
+        shape: tuple[int, int, int] | None = None,
+    ) -> None:
         if arch not in ("TPU-v5e", "TPU-v6e", "TPU-v7"):
             raise NotImplementedError("Unsupported TPU architecture")
         base = instruction
-        self.mxu = None
+        self.mxu: str | None = None
         if base.endswith((".mxu0", ".mxu1", ".mxu2", ".mxu3")):
             base, self.mxu = base.rsplit(".", 1)
         if (arch == "TPU-v5e" and self.mxu not in (None, "mxu0")) or self.mxu in (
@@ -24,9 +70,7 @@ class MMA(MMAOperation):
             raise NotImplementedError("Uncaptured MXU identifier")
         self.format = "bf16"
         fp8_names = {
-            f"vmatmul.mubr.{kind}.{suffix}": fmt
-            for kind, fmt in [("f8e4m3fn", "e4m3fn"), ("f8e5m2", "e5m2")]
-            for suffix in ["gmra", "vlgmr.msra.gmra.mrb[0]"]
+            name: fmt for fmt, names in FP8_INSTRUCTIONS.items() for name in names
         }
         if arch == "TPU-v7" and base in fp8_names:
             if weight_load != "vmatpush1":
@@ -45,18 +89,7 @@ class MMA(MMAOperation):
             self.shape = (self.m, self.k, self.n)
             self.a_shape, self.b_shape, self.d_shape = (32, 256), (256, 256), (32, 256)
             return
-        names = {
-            "TPU-v5e": ("vmatmul.bf16.gmra", "vmatmul.bf16.vlgmr.msra.gmra"),
-            "TPU-v6e": ("vmatmul.mubr.bf16.gmra", "vmatmul.mubr.bf16.vlgmr.msra.gmra"),
-            "TPU-v7": (
-                "vmatmul.mubr.bf16.gmra",
-                "vmatmul.mubr.bf16.vlgmr.msra.gmra",
-                "vmatmul.mubr.bf16.vlgmr.msra.gmra.mrb[0]",
-                "vmatmul.mubr.bf16.vlgmr2.msra.gmra.mrb",
-                "vmatmul.mubr.bf16.msra.gmra.mrb",
-            ),
-        }
-        if base not in names[arch]:
+        if base not in BF16_INSTRUCTIONS[arch]:
             raise NotImplementedError("Unsupported captured BF16 vmatmul instruction")
         loads = {
             "TPU-v5e": ("vmatpush",),
@@ -82,7 +115,7 @@ class MMA(MMAOperation):
         self.d_shape = ((2,) if self.groups == 2 else ()) + (self.m, self.n)
 
     @property
-    def a_type(self):
+    def a_type(self) -> torch.dtype:
         return {
             "bf16": torch.bfloat16,
             "e4m3fn": torch.float8_e4m3fn,
@@ -90,46 +123,7 @@ class MMA(MMAOperation):
         }[self.format]
 
     @property
-    def b_type(self):
+    def b_type(self) -> torch.dtype:
         return self.a_type
 
-    c_type = torch.float32
-    d_type = torch.float32
-
-    @property
-    def reduction_groups(self):
-        """Local dot-product term indices per update in the numerical model, before row packing.
-
-        For dual mode this applies separately to each independent stream.
-        V6 wide mode merges four rounded DP4 outputs in cross-half pairs.
-        V7 wide mode merges two rounded fused DP8 outputs. The merged FP32
-        value then updates the running sum.
-        This is a numerical mapping, not a physical lane assignment.
-        """
-        if self.format != "bf16":
-            return tuple(
-                (tuple(range(j, j + 4)) + tuple(range(j + 128, j + 132)),)
-                for j in range(0, 128, 4)
-            )
-        if self.k == 128:
-            return tuple(
-                (tuple(range(i, i + 4)), tuple(range(i + 4, i + 8)))
-                for i in range(0, 128, 8)
-            )
-        if self.arch == "TPU-v7":
-            return tuple(
-                (
-                    tuple(range(i, i + 4)) + tuple(range(i + 128, i + 132)),
-                    tuple(range(i + 4, i + 8)) + tuple(range(i + 132, i + 136)),
-                )
-                for i in range(0, 128, 8)
-            )
-        return tuple(
-            (
-                tuple(range(i, i + 4)),
-                tuple(range(i + 128, i + 132)),
-                tuple(range(i + 4, i + 8)),
-                tuple(range(i + 132, i + 136)),
-            )
-            for i in range(0, 128, 8)
-        )
+    d_type: torch.dtype = torch.float32

@@ -29,3 +29,11 @@ class MMABlockScaleOperation:
         alpha: torch.Tensor,
         beta: torch.Tensor,
     ) -> torch.Tensor: ...
+
+
+class DPOperation:
+    """Dot-product operation without an initial accumulator operand."""
+
+    def dp(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor: ...
+
+    def __call__(self, A: torch.Tensor, B: torch.Tensor) -> torch.Tensor: ...

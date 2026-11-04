@@ -1,99 +1,65 @@
-"""Finite-input reference for prepared TPU BF16 and FP8 MXU groups."""
+"""Finite-input simulation of prepared TPU MXU instruction groups."""
 
 import torch
 
+from .. import DPOperation
+from ..arithmetic.fdp import MMA_FTZ_FDP, MMA_T_FDP
 from . import isa_vmatmul
-from ._validation import validate_words as _validate_words
-from .arithmetic import bf16_dot, fp8_dot
 
 
 class MMA(isa_vmatmul.MMA):
-    """MMA(arch, instruction, weight_load=...)(A, B, C=None).
+    """Prepared logical matrix product, including MUBR preparation when used.
 
-    Includes the corresponding MUBR preparation and already loaded RHS state.
-    Inputs are logical matrices, not packed VREGs. vmatpush3 returns both
-    independent products unless shape selects a single stream. Wide mode uses
-    push1+push2 on v6e and push1 on v7.
-    C must be zero: arbitrary accumulator initialization has not been decoded.
-    An external merge belongs to the caller, not to this instruction group.
+    vmatpush3 exposes two independent streams unless an explicit narrow shape
+    selects one. External FP32 accumulator merges are performed by the caller.
     """
 
-    def dot_bits(self, a, b, c=0):
-        """One output dot (one stream for push3), using FP32 operand encodings."""
-        if len(a) != self.k or len(b) != self.k:
-            raise ValueError(f"Expected exactly {self.k} terms per output dot")
-        aa = _validate_words(a, self.format)
-        bb = _validate_words(b, self.format)
-        cc = _validate_words([c], "fp32")[0]
-        if cc & 0x7FFFFFFF:
-            raise NotImplementedError(
-                "Only zero C is supported; merge FP32 results explicitly"
-            )
-        # Reuse the measured numerical core; no shape-to-compiler-profile lookup.
-        return self._dot(aa, bb)
-
-    def _dot(self, a, b):
+    def __init__(
+        self,
+        arch: str,
+        instruction: str,
+        *,
+        weight_load: str,
+        shape: tuple[int, int, int] | None = None,
+    ) -> None:
+        super().__init__(arch, instruction, weight_load=weight_load, shape=shape)
+        self.model: DPOperation
         if self.format != "bf16":
-            return fp8_dot(a, b)
-        return bf16_dot(a, b, self.arch)
+            self.model = MMA_T_FDP()
+        else:
+            v7 = self.arch == "TPU-v7"
+            self.model = MMA_FTZ_FDP(
+                fraction=27 if v7 else 26,
+                partial=8 if v7 and self.k == 256 else 4,
+                merge=4 if self.arch == "TPU-v6e" and self.k == 256 else 2,
+                sticky=not v7,
+                cross=self.k == 256,
+            )
 
-    @staticmethod
-    def _words(x, shape, fmt):
-        if not isinstance(x, torch.Tensor) or x.device.type != "cpu":
-            raise ValueError("CPU PyTorch tensors required")
-        if tuple(x.shape) != shape or not x.is_floating_point():
-            raise ValueError(f"Expected floating-point tensor with shape {shape}")
+    def validate(self, x: torch.Tensor) -> None:
+        if not x.is_floating_point():
+            raise ValueError("Floating-point operands required")
         if x.requires_grad:
             raise NotImplementedError(
-                "Reference simulator has no autograd; pass detached tensors"
+                "Pass detached tensors; this simulator has no autograd"
             )
-        if x.dtype == torch.float64 and not torch.equal(x.float().double(), x):
-            raise ValueError("FP64 values must be exactly representable in FP32")
-        words = (
-            x.float()
-            .contiguous()
-            .view(torch.int32)
-            .to(torch.int64)
-            .bitwise_and(0xFFFFFFFF)
-        )
-        return _validate_words(words.flatten().tolist(), fmt)
+        # FP32 carriers are accepted only when they exactly encode the input format.
+        value = x.double()
+        if not torch.isfinite(value).all():
+            raise ValueError("Only finite input values are supported")
+        if not torch.equal(x.to(self.a_type).double(), value):
+            raise ValueError(f"Inputs must be exactly representable in {self.a_type}")
 
-    def __call__(self, A, B, C=None):
-        aa = self._words(A, self.a_shape, self.format)
-        bb = self._words(B, self.b_shape, self.format)
-        if C is not None:
-            if not isinstance(C, torch.Tensor) or C.dtype != torch.float32:
-                raise ValueError("C must be an FP32 tensor")
-            cc = self._words(C, self.d_shape, "fp32")
-            if any(x & 0x7FFFFFFF for x in cc):
-                raise NotImplementedError(
-                    "Only zero C is supported; merge FP32 results explicitly"
-                )
-        out = []
-        for group in range(self.groups):
-            a0, b0 = group * self.m * self.k, group * self.k * self.n
-            rows = [aa[a0 + i * self.k : a0 + (i + 1) * self.k] for i in range(self.m)]
-            cols = [bb[b0 + j : b0 + self.k * self.n : self.n] for j in range(self.n)]
-            # Identical rows/columns have identical arithmetic. Memoization keeps
-            # sparse diagnostic matrices practical without changing reduction order.
-            cache = {}
-            for row in rows:
-                for col in cols:
-                    key = (tuple(row), tuple(col))
-                    if key not in cache:
-                        cache[key] = self._dot(row, col)
-                    out.append(cache[key])
-        return (
-            torch.tensor(out, dtype=torch.int64)
-            .to(torch.int32)
-            .view(torch.float32)
-            .reshape(self.d_shape)
-        )
+    def dp(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        if a.ndim == 0 or b.ndim == 0 or a.shape[-1] != self.k or b.shape[-1] != self.k:
+            raise ValueError(f"Expected exactly {self.k} terms per dot")
+        if a.device != b.device:
+            raise ValueError("Operands must be on the same device")
+        self.validate(a)
+        self.validate(b)
+        return self.model.dp(a, b)
 
-    def dpa(self, a, b, c):
-        """Evaluate one logical output dot; not a physical DPA8 instruction."""
-        aa = self._words(a, (self.k,), self.format)
-        bb = self._words(b, (self.k,), self.format)
-        cc = self._words(c, (), "fp32")[0]
-        word = self.dot_bits(aa, bb, cc)
-        return torch.tensor(word, dtype=torch.int64).to(torch.int32).view(torch.float32)
+    def __call__(self, A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
+        if tuple(A.shape) != self.a_shape or tuple(B.shape) != self.b_shape:
+            raise ValueError(f"Expected operand shapes {self.a_shape}, {self.b_shape}")
+        return self.dp(A.unsqueeze(-2), B.transpose(-1, -2).unsqueeze(-3))
