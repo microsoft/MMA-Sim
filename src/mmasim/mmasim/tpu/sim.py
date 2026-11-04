@@ -3,7 +3,7 @@
 import torch
 
 from .. import DPOperation
-from ..arithmetic.fdp import MMA_FTZ_FDP, MMA_T_FDP
+from ..arithmetic.fdp import MMA_FTZ_FDP, MMA_T_FDP, add_fp32
 from . import isa_vmatmul
 
 
@@ -11,7 +11,9 @@ class MMA(isa_vmatmul.MMA):
     """Prepared logical matrix product, including MUBR preparation when used.
 
     vmatpush3 exposes two independent streams unless an explicit narrow shape
-    selects one. External FP32 accumulator merges are performed by the caller.
+    selects one. An optional FP32 C is added after the complete MXU result using
+    external FP32 addition with input/output FTZ. It is not an initial PE carry.
+    dp(a, b) exposes the underlying two-input operation; dpa(a, b, c) adds C.
     """
 
     def __init__(
@@ -59,7 +61,27 @@ class MMA(isa_vmatmul.MMA):
         self.validate(b)
         return self.model.dp(a, b)
 
-    def __call__(self, A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
+    @staticmethod
+    def add_accumulator(result: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+        """Apply the external FP32 merge to a completed MXU result."""
+        if c.dtype != torch.float32 or c.shape != result.shape:
+            raise ValueError(f"C must be FP32 with shape {tuple(result.shape)}")
+        if c.device != result.device:
+            raise ValueError("C must be on the same device as the operands")
+        if c.requires_grad:
+            raise NotImplementedError(
+                "Pass detached tensors; this simulator has no autograd"
+            )
+        return add_fp32(result, c)
+
+    def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+        """dp(a, b), followed by a separate FP32 addition of c."""
+        return self.add_accumulator(self.dp(a, b), c)
+
+    def __call__(
+        self, A: torch.Tensor, B: torch.Tensor, C: torch.Tensor | None = None
+    ) -> torch.Tensor:
         if tuple(A.shape) != self.a_shape or tuple(B.shape) != self.b_shape:
             raise ValueError(f"Expected operand shapes {self.a_shape}, {self.b_shape}")
-        return self.dp(A.unsqueeze(-2), B.transpose(-1, -2).unsqueeze(-3))
+        result = self.dp(A.unsqueeze(-2), B.transpose(-1, -2).unsqueeze(-3))
+        return result if C is None else self.add_accumulator(result, C)

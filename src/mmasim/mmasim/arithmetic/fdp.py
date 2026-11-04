@@ -11,8 +11,10 @@ from .ftz_mul_add import flush_subnormal, ftz_add
 
 
 def add_fp32(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-    """RNE FP32 addition, flushing inputs/outputs and canonicalizing zero/NaN."""
-    result = flush_subnormal(ftz_add(flush_subnormal(a), flush_subnormal(b)))
+    """RNE FP32 addition with sign-preserving input/output FTZ and canonical NaN."""
+    result = ftz_add(
+        flush_subnormal(a, keep_sign=True), flush_subnormal(b, keep_sign=True)
+    )
     return torch.where(
         torch.isnan(result), torch.full_like(result, float("nan")), result
     )

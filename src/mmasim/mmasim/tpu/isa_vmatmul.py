@@ -6,7 +6,7 @@ required because vmatmul alone does not specify its arithmetic mode.
 """
 
 import torch
-from .. import DPOperation
+from .. import MMAOperation
 
 BF16_INSTRUCTIONS: dict[str, list[str]] = {
     "TPU-v5e": ["vmatmul.bf16.gmra", "vmatmul.bf16.vlgmr.msra.gmra"],
@@ -32,7 +32,7 @@ FP8_INSTRUCTIONS: dict[str, list[str]] = {
 }
 
 
-class MMA(DPOperation):
+class MMA(MMAOperation):
     """Captured instruction descriptor, with logical operand shapes in M,K,N order."""
 
     arch: str
@@ -48,6 +48,7 @@ class MMA(DPOperation):
     a_shape: tuple[int, ...]
     b_shape: tuple[int, ...]
     d_shape: tuple[int, ...]
+    c_shape: tuple[int, ...]
 
     def __init__(
         self,
@@ -88,6 +89,7 @@ class MMA(DPOperation):
             self.m, self.k, self.n, self.groups = 32, 256, 256, 1
             self.shape = (self.m, self.k, self.n)
             self.a_shape, self.b_shape, self.d_shape = (32, 256), (256, 256), (32, 256)
+            self.c_shape = self.d_shape
             return
         if base not in BF16_INSTRUCTIONS[arch]:
             raise NotImplementedError("Unsupported captured BF16 vmatmul instruction")
@@ -113,6 +115,7 @@ class MMA(DPOperation):
         self.a_shape = ((2,) if self.groups == 2 else ()) + (self.m, self.k)
         self.b_shape = ((2,) if self.groups == 2 else ()) + (self.k, self.n)
         self.d_shape = ((2,) if self.groups == 2 else ()) + (self.m, self.n)
+        self.c_shape = self.d_shape
 
     @property
     def a_type(self) -> torch.dtype:
@@ -126,4 +129,5 @@ class MMA(DPOperation):
     def b_type(self) -> torch.dtype:
         return self.a_type
 
+    c_type: torch.dtype = torch.float32
     d_type: torch.dtype = torch.float32
