@@ -38,10 +38,15 @@ def partial_bf16(
 ) -> torch.Tensor:
     """One fused BF16 partial, including product FTZ/overflow and tail handling."""
     product = flush_subnormal(a.float()).double() * flush_subnormal(b.float()).double()
+    invalid = torch.isnan(product).any(dim=-1)
     positive_inf = (product >= 2.0**128).any(dim=-1)
     negative_inf = (product <= -(2.0**128)).any(dim=-1)
     product = torch.where(
-        (product.abs() < 2.0**-126) | (product.abs() >= 2.0**128), 0.0, product
+        (product.abs() < 2.0**-126)
+        | ~torch.isfinite(product)
+        | (product.abs() >= 2.0**128),
+        0.0,
+        product,
     )
     aligned, scaled, step = align_products(product, fraction)
     total = aligned.sum(dim=-1)
@@ -60,16 +65,19 @@ def partial_bf16(
     result = flush_subnormal(torch.ldexp(total, step).float())
     result = torch.where(positive_inf, float("inf"), result)
     result = torch.where(negative_inf, -float("inf"), result)
-    return torch.where(positive_inf & negative_inf, float("nan"), result)
+    return torch.where(invalid | (positive_inf & negative_inf), float("nan"), result)
 
 
 def quantize_p9(value: torch.Tensor, round_nearest: bool) -> torch.Tensor:
     """Nine significant bits carried in FP32, with RTZ or ties-to-even RNE."""
-    mantissa, exponent = torch.frexp(value.double())
+    finite = torch.isfinite(value)
+    mantissa, exponent = torch.frexp(torch.where(finite, value.double(), 0.0))
     scaled = mantissa * 512.0
     rounded = torch.round(scaled) if round_nearest else torch.trunc(scaled)
     result = torch.ldexp(rounded / 512.0, exponent).float()
-    return torch.where(result == 0, torch.zeros_like(result), result)
+    result = torch.where(result == 0, torch.zeros_like(result), result)
+    result = torch.where(torch.isinf(value), value.float(), result)
+    return torch.where(torch.isnan(value), float("nan"), result)
 
 
 def cross_halves(value: torch.Tensor) -> torch.Tensor:
@@ -128,8 +136,19 @@ class MMA_T_FDP(DPOperation):
         a, b = cross_halves(a), cross_halves(b)
         a = a.reshape(*a.shape[:-1], 32, 8)
         b = b.reshape(*b.shape[:-1], 32, 8)
-        aligned, _, step = align_products(a.double() * b.double(), 8)
+        product = a.double() * b.double()
+        invalid = torch.isnan(product).any(dim=-1)
+        positive_inf = torch.isposinf(product).any(dim=-1)
+        negative_inf = torch.isneginf(product).any(dim=-1)
+        aligned, _, step = align_products(
+            torch.where(torch.isfinite(product), product, 0.0), 8
+        )
         parts = quantize_p9(torch.ldexp(aligned.sum(dim=-1), step), False)
+        parts = torch.where(positive_inf, float("inf"), parts)
+        parts = torch.where(negative_inf, -float("inf"), parts)
+        parts = torch.where(
+            invalid | (positive_inf & negative_inf), float("nan"), parts
+        )
         acc = torch.zeros_like(parts[..., 0])
         for index in range(32):
             acc = quantize_p9(acc.double() + parts[..., index].double(), True)

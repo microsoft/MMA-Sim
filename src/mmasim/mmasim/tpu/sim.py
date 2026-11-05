@@ -1,4 +1,4 @@
-"""Finite-input simulation of prepared TPU MXU instruction groups."""
+"""Numerical simulation of prepared TPU MXU instruction groups."""
 
 import torch
 
@@ -47,9 +47,11 @@ class MMA(isa_vmatmul.MMA):
             )
         # FP32 carriers are accepted only when they exactly encode the input format.
         value = x.double()
-        if not torch.isfinite(value).all():
-            raise ValueError("Only finite input values are supported")
-        if not torch.equal(x.to(self.a_type).double(), value):
+        converted = x.to(self.a_type).double()
+        representable = (converted == value) | (
+            torch.isnan(converted) & torch.isnan(value)
+        )
+        if not representable.all():
             raise ValueError(f"Inputs must be exactly representable in {self.a_type}")
 
     def dp(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
