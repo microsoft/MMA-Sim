@@ -9,7 +9,11 @@ import torch
 from .. import MMAOperation
 
 BF16_INSTRUCTIONS: dict[str, list[str]] = {
-    "TPU-v5e": ["vmatmul.bf16.gmra", "vmatmul.bf16.vlgmr.msra.gmra"],
+    "TPU-v5e": [
+        "vmatmul.bf16.gmra",
+        "vmatmul.bf16.vlgmr.msra.gmra",
+        "vmatmul.bf16.vlgmr.msrb.gmra",
+    ],
     "TPU-v6e": ["vmatmul.mubr.bf16.gmra", "vmatmul.mubr.bf16.vlgmr.msra.gmra"],
     "TPU-v7": [
         "vmatmul.mubr.bf16.gmra",
@@ -64,10 +68,7 @@ class MMA(MMAOperation):
         self.mxu: str | None = None
         if base.endswith((".mxu0", ".mxu1", ".mxu2", ".mxu3")):
             base, self.mxu = base.rsplit(".", 1)
-        if (arch == "TPU-v5e" and self.mxu not in (None, "mxu0")) or self.mxu in (
-            "mxu2",
-            "mxu3",
-        ):
+        if arch != "TPU-v5e" and self.mxu in ("mxu2", "mxu3"):
             raise NotImplementedError("Uncaptured MXU identifier")
         self.format = "bf16"
         fp8_names = {
