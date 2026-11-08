@@ -13,7 +13,7 @@ class MMA(isa_vmatmul.MMA):
     vmatpush3 exposes two independent streams unless an explicit narrow shape
     selects one. An optional FP32 C is added after the complete MXU result using
     external FP32 addition with input/output FTZ. It is not an initial PE carry.
-    dp(a, b) exposes the underlying two-input operation; dpa(a, b, c) adds C.
+    dpa(a, b, c) provides the vector interface; omit c for the MXU result alone.
     """
 
     def __init__(
@@ -54,7 +54,7 @@ class MMA(isa_vmatmul.MMA):
         if not representable.all():
             raise ValueError(f"Inputs must be exactly representable in {self.a_type}")
 
-    def dp(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    def _dot(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         if a.ndim == 0 or b.ndim == 0 or a.shape[-1] != self.k or b.shape[-1] != self.k:
             raise ValueError(f"Expected exactly {self.k} terms per dot")
         if a.device != b.device:
@@ -76,14 +76,19 @@ class MMA(isa_vmatmul.MMA):
             )
         return add_fp32(result, c)
 
-    def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-        """dp(a, b), followed by a separate FP32 addition of c."""
-        return self.add_accumulator(self.dp(a, b), c)
+    def dpa(
+        self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        """MXU dot followed by an optional external FP32 addition of c.
+
+        Omitting c skips the addition, preserving the MXU result's signed zero.
+        """
+        result = self._dot(a, b)
+        return result if c is None else self.add_accumulator(result, c)
 
     def __call__(
         self, A: torch.Tensor, B: torch.Tensor, C: torch.Tensor | None = None
     ) -> torch.Tensor:
         if tuple(A.shape) != self.a_shape or tuple(B.shape) != self.b_shape:
             raise ValueError(f"Expected operand shapes {self.a_shape}, {self.b_shape}")
-        result = self.dp(A.unsqueeze(-2), B.transpose(-1, -2).unsqueeze(-3))
-        return result if C is None else self.add_accumulator(result, C)
+        return self.dpa(A.unsqueeze(-2), B.transpose(-1, -2).unsqueeze(-3), C)
