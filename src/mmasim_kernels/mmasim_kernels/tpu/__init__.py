@@ -47,12 +47,3 @@ class MMA(MMAKernel):
         # Materialize the MXU output before C is added: C is not an initial PE carry.
         product.cpu()
         return (product + C).cpu()
-
-    def dpa(self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-        A = torch.zeros((self.m, self.k), dtype=self.a_type)
-        B = torch.zeros((self.k, self.n), dtype=self.b_type)
-        C = torch.zeros((self.m, self.n), dtype=self.c_type)
-        A[0, : a.numel()] = a.cpu()
-        B[: b.numel(), 0] = b.cpu()
-        C[0, 0] = c.cpu()
-        return self(A, B, C)[0, 0]

@@ -6,7 +6,6 @@ sequential; products, alignment, and partial reductions run as tensor operations
 
 import torch
 
-from .. import DPOperation
 from .ftz_mul_add import flush_subnormal, ftz_add
 
 
@@ -91,7 +90,7 @@ def cross_halves(value: torch.Tensor) -> torch.Tensor:
     )
 
 
-class MMA_FTZ_FDP(DPOperation):
+class MMA_FTZ_FDP:
     """FTZ-FDP BF16: fused partials, pairwise FP32 merges, and a serial carry.
 
     fraction is the alignment precision below the leading product bit. partial
@@ -129,7 +128,7 @@ class MMA_FTZ_FDP(DPOperation):
         return self.dp(A.unsqueeze(-2), B.transpose(-1, -2).unsqueeze(-3))
 
 
-class MMA_T_FDP(DPOperation):
+class MMA_T_FDP:
     """T-FDP FP8: cross-half DP8 RTZ partials and serial p9 RNE accumulation."""
 
     def dp(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:

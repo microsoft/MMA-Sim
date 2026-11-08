@@ -2,7 +2,6 @@
 
 import torch
 
-from .. import DPOperation
 from ..arithmetic.fdp import MMA_FTZ_FDP, MMA_T_FDP, add_fp32
 from . import isa_vmatmul
 
@@ -25,12 +24,12 @@ class MMA(isa_vmatmul.MMA):
         shape: tuple[int, int, int] | None = None,
     ) -> None:
         super().__init__(arch, instruction, weight_load=weight_load, shape=shape)
-        self.model: DPOperation
+        self.arithmetic_op: MMA_FTZ_FDP | MMA_T_FDP
         if self.format != "bf16":
-            self.model = MMA_T_FDP()
+            self.arithmetic_op = MMA_T_FDP()
         else:
             v7 = self.arch == "TPU-v7"
-            self.model = MMA_FTZ_FDP(
+            self.arithmetic_op = MMA_FTZ_FDP(
                 fraction=27 if v7 else 26,
                 partial=8 if v7 and self.k == 256 else 4,
                 merge=4 if self.arch == "TPU-v6e" and self.k == 256 else 2,
@@ -61,7 +60,7 @@ class MMA(isa_vmatmul.MMA):
             raise ValueError("Operands must be on the same device")
         self.validate(a)
         self.validate(b)
-        return self.model.dp(a, b)
+        return self.arithmetic_op.dp(a, b)
 
     @staticmethod
     def add_accumulator(result: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
