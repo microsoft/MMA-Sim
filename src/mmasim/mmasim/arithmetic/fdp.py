@@ -6,6 +6,7 @@ sequential; products, alignment, and partial reductions run as tensor operations
 
 import torch
 
+from .. import MMAOperation
 from .ftz_mul_add import flush_subnormal, ftz_add
 
 
@@ -17,6 +18,19 @@ def add_fp32(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     return torch.where(
         torch.isnan(result), torch.full_like(result, float("nan")), result
     )
+
+
+def add_accumulator(result: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+    """Apply the external FP32 merge to a completed MXU result."""
+    if c.dtype != torch.float32 or c.shape != result.shape:
+        raise ValueError(f"C must be FP32 with shape {tuple(result.shape)}")
+    if c.device != result.device:
+        raise ValueError("C must be on the same device as the operands")
+    if c.requires_grad:
+        raise NotImplementedError(
+            "Pass detached tensors; this simulator has no autograd"
+        )
+    return add_fp32(result, c)
 
 
 def align_products(
@@ -90,7 +104,7 @@ def cross_halves(value: torch.Tensor) -> torch.Tensor:
     )
 
 
-class MMA_FTZ_FDP:
+class MMA_FTZ_FDP(MMAOperation):
     """FTZ-FDP BF16: fused partials, pairwise FP32 merges, and a serial carry.
 
     fraction is the alignment precision below the leading product bit. partial
@@ -108,7 +122,10 @@ class MMA_FTZ_FDP:
         self.sticky: bool = sticky
         self.cross: bool = cross
 
-    def dp(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    def dpa(
+        self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        """Compute the MXU result, then merge optional c using external FP32 add."""
         if a.shape[-1] != b.shape[-1] or a.shape[-1] % (self.partial * self.merge):
             raise ValueError("Dot length must be a multiple of partial * merge")
         if self.cross:
@@ -122,16 +139,21 @@ class MMA_FTZ_FDP:
         acc = torch.zeros_like(parts[..., 0])
         for index in range(parts.shape[-1]):
             acc = add_fp32(acc, parts[..., index])
-        return acc
+        return acc if c is None else add_accumulator(acc, c)
 
-    def __call__(self, A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
-        return self.dp(A.unsqueeze(-2), B.transpose(-1, -2).unsqueeze(-3))
+    def __call__(
+        self, A: torch.Tensor, B: torch.Tensor, C: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        return self.dpa(A.unsqueeze(-2), B.transpose(-1, -2).unsqueeze(-3), C)
 
 
-class MMA_T_FDP:
+class MMA_T_FDP(MMAOperation):
     """T-FDP FP8: cross-half DP8 RTZ partials and serial p9 RNE accumulation."""
 
-    def dp(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    def dpa(
+        self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        """Compute the MXU result, then merge optional c using external FP32 add."""
         a, b = cross_halves(a), cross_halves(b)
         a = a.reshape(*a.shape[:-1], 32, 8)
         b = b.reshape(*b.shape[:-1], 32, 8)
@@ -151,7 +173,9 @@ class MMA_T_FDP:
         acc = torch.zeros_like(parts[..., 0])
         for index in range(32):
             acc = quantize_p9(acc.double() + parts[..., index].double(), True)
-        return acc
+        return acc if c is None else add_accumulator(acc, c)
 
-    def __call__(self, A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
-        return self.dp(A.unsqueeze(-2), B.transpose(-1, -2).unsqueeze(-3))
+    def __call__(
+        self, A: torch.Tensor, B: torch.Tensor, C: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        return self.dpa(A.unsqueeze(-2), B.transpose(-1, -2).unsqueeze(-3), C)

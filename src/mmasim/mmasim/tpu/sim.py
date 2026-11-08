@@ -2,7 +2,7 @@
 
 import torch
 
-from ..arithmetic.fdp import MMA_FTZ_FDP, MMA_T_FDP, add_fp32
+from ..arithmetic.fdp import MMA_FTZ_FDP, MMA_T_FDP
 from . import isa_vmatmul
 
 
@@ -53,28 +53,6 @@ class MMA(isa_vmatmul.MMA):
         if not representable.all():
             raise ValueError(f"Inputs must be exactly representable in {self.a_type}")
 
-    def _dot(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-        if a.ndim == 0 or b.ndim == 0 or a.shape[-1] != self.k or b.shape[-1] != self.k:
-            raise ValueError(f"Expected exactly {self.k} terms per dot")
-        if a.device != b.device:
-            raise ValueError("Operands must be on the same device")
-        self.validate(a)
-        self.validate(b)
-        return self.arithmetic_op.dp(a, b)
-
-    @staticmethod
-    def add_accumulator(result: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-        """Apply the external FP32 merge to a completed MXU result."""
-        if c.dtype != torch.float32 or c.shape != result.shape:
-            raise ValueError(f"C must be FP32 with shape {tuple(result.shape)}")
-        if c.device != result.device:
-            raise ValueError("C must be on the same device as the operands")
-        if c.requires_grad:
-            raise NotImplementedError(
-                "Pass detached tensors; this simulator has no autograd"
-            )
-        return add_fp32(result, c)
-
     def dpa(
         self, a: torch.Tensor, b: torch.Tensor, c: torch.Tensor | None = None
     ) -> torch.Tensor:
@@ -82,8 +60,13 @@ class MMA(isa_vmatmul.MMA):
 
         Omitting c skips the addition, preserving the MXU result's signed zero.
         """
-        result = self._dot(a, b)
-        return result if c is None else self.add_accumulator(result, c)
+        if a.ndim == 0 or b.ndim == 0 or a.shape[-1] != self.k or b.shape[-1] != self.k:
+            raise ValueError(f"Expected exactly {self.k} terms per dot")
+        if a.device != b.device:
+            raise ValueError("Operands must be on the same device")
+        self.validate(a)
+        self.validate(b)
+        return self.arithmetic_op.dpa(a, b, c)
 
     def __call__(
         self, A: torch.Tensor, B: torch.Tensor, C: torch.Tensor | None = None
