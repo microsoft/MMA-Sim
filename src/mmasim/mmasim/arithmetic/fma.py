@@ -47,6 +47,7 @@ for kernel in (fma_cpu_kernel.fma_f32, fma_cpu_kernel.fma_f64):
     kernel.argtypes = [ctypes.c_void_p] * 4 + [ctypes.c_int]
 
 
+@torch.library.custom_op("mmasim::fma_cpu", mutates_args=())
 def fma_cpu(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
     a, b, c = a.contiguous(), b.contiguous(), c.contiguous()
     d = torch.empty_like(a)
@@ -55,6 +56,12 @@ def fma_cpu(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
     )
     kernel(a.data_ptr(), b.data_ptr(), c.data_ptr(), d.data_ptr(), a.numel())
     return d
+
+
+# torch.compile traces this instead, which only describes d
+@fma_cpu.register_fake
+def _(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+    return torch.empty_like(a, memory_format=torch.contiguous_format)
 
 
 def fma(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
