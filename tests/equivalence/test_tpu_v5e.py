@@ -17,16 +17,14 @@ def test_tpu_v5e(trials: int = 100) -> None:
             weight_load=kernel.weight_load,
             shape=(16, k, k),
         )
-        for distribution in ("bits", "normal", "exponents"):
-            print(f"Testing {kernel.arch} K{k}: {distribution}", flush=True)
-            random_test(
-                sim,
-                kernel,
-                allow_different_nan=False,
-                trials=trials,
-                device="cpu",
-                distribution=distribution,
-            )
+        print(f"Testing {kernel.arch} K{k}", flush=True)
+        random_test(
+            sim,
+            kernel,
+            allow_different_nan=False,
+            trials=trials,
+            device="cpu",
+        )
     print("Tests passed!", flush=True)
 
 

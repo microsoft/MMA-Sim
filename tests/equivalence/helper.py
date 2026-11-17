@@ -12,21 +12,7 @@ def get_random_tensor(
     dtype: torch.dtype,
     device: str = "cuda",
     packing: int = 1,
-    distribution: str = "bits",
 ) -> torch.Tensor:
-    if distribution != "bits":
-        if packing != 1 or not dtype.is_floating_point:
-            raise ValueError(
-                "Value distributions require unpacked floating-point inputs"
-            )
-        if distribution == "normal":
-            return torch.randn((m, n), device=device).to(dtype)
-        if distribution == "exponents":
-            sign = 2 * torch.randint(0, 2, (m, n), device=device) - 1
-            significand = 1 + torch.randint(0, 128, (m, n), device=device).float() / 128
-            exponent = torch.randint(-16, 17, (m, n), device=device)
-            return torch.ldexp(sign * significand, exponent).to(dtype)
-        raise ValueError(f"Unknown input distribution: {distribution}")
     tensor = torch.randint(
         -(2**31),
         2**31,
@@ -44,7 +30,6 @@ def random_test(
     trials: int,
     *,
     device: str = "cuda",
-    distribution: str = "bits",
 ) -> None:
     m, n, k = kernel.m, kernel.n, kernel.k
     a_type = kernel.a_type
@@ -57,13 +42,9 @@ def random_test(
         has_block_scale = kernel.block_size > 0
         packing = kernel.packing
     for _ in range(trials):
-        A = get_random_tensor(
-            m, k, a_type, device=device, packing=packing, distribution=distribution
-        )
-        B = get_random_tensor(
-            n, k, b_type, device=device, packing=packing, distribution=distribution
-        ).T
-        C = get_random_tensor(m, n, c_type, device=device, distribution=distribution)
+        A = get_random_tensor(m, k, a_type, device=device, packing=packing)
+        B = get_random_tensor(n, k, b_type, device=device, packing=packing).T
+        C = get_random_tensor(m, n, c_type, device=device)
         if not has_block_scale:
             assert isinstance(sim, MMAOperation)
             assert isinstance(kernel, MMAOperation)

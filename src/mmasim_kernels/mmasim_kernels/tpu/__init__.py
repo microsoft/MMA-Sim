@@ -14,8 +14,8 @@ class MMA(MMAKernel):
     """
 
     def __init__(self, arch: str, k: int = 128) -> None:
-        if arch not in ("TPU-v5e", "TPU-v6e") or k not in (128, 256):
-            raise ValueError("Supported footprints are v5e K128 and v6e K128/K256")
+        if arch not in ("TPU-v5e", "TPU-v6e", "TPU-v7") or k not in (128, 256):
+            raise ValueError("Supported footprints are v5e K128 and v6e/v7 K128/K256")
         if arch == "TPU-v5e" and k != 128:
             raise ValueError("The v5e instruction footprint has K128")
         import torch_tpu  # noqa: F401; register the optional TPU backend
@@ -26,11 +26,14 @@ class MMA(MMAKernel):
             if arch == "TPU-v5e"
             else "vmatmul.mubr.bf16.vlgmr.msra.gmra"
         )
-        self.weight_load: str = (
-            "vmatpush"
-            if arch == "TPU-v5e"
-            else "vmatpush3" if k == 128 else "vmatpush1+vmatpush2"
-        )
+        if arch == "TPU-v5e":
+            self.weight_load: str = "vmatpush"
+        elif k == 128:
+            self.weight_load = "vmatpush3"
+        else:
+            self.weight_load = (
+                "vmatpush1" if arch == "TPU-v7" else "vmatpush1+vmatpush2"
+            )
         descriptor = Instruction(
             arch, self.instruction, weight_load=self.weight_load, shape=(16, k, k)
         )

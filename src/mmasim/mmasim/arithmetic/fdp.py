@@ -9,15 +9,21 @@ import torch
 from .. import MMAOperation
 from .ftz_mul_add import flush_subnormal, ftz_add
 
+CANONICAL_NAN_BITS: int = 0x7FC00000
+
+
+def canonicalize_nan(value: torch.Tensor, invalid: torch.Tensor) -> torch.Tensor:
+    """Set invalid FP32 outputs to the measured TPU canonical NaN encoding."""
+    words = value.contiguous().view(torch.int32)
+    return torch.where(invalid, CANONICAL_NAN_BITS, words).view(torch.float32)
+
 
 def add_fp32(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """RNE FP32 addition with sign-preserving input/output FTZ and canonical NaN."""
     result = ftz_add(
         flush_subnormal(a, keep_sign=True), flush_subnormal(b, keep_sign=True)
     )
-    return torch.where(
-        torch.isnan(result), torch.full_like(result, float("nan")), result
-    )
+    return canonicalize_nan(result, torch.isnan(result))
 
 
 def add_accumulator(result: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
@@ -78,7 +84,7 @@ def partial_bf16(
     result = flush_subnormal(torch.ldexp(total, step).float())
     result = torch.where(positive_inf, float("inf"), result)
     result = torch.where(negative_inf, -float("inf"), result)
-    return torch.where(invalid | (positive_inf & negative_inf), float("nan"), result)
+    return canonicalize_nan(result, invalid | (positive_inf & negative_inf))
 
 
 def quantize_p9(value: torch.Tensor, round_nearest: bool) -> torch.Tensor:
@@ -90,7 +96,7 @@ def quantize_p9(value: torch.Tensor, round_nearest: bool) -> torch.Tensor:
     result = torch.ldexp(rounded / 512.0, exponent).float()
     result = torch.where(result == 0, torch.zeros_like(result), result)
     result = torch.where(torch.isinf(value), value.float(), result)
-    return torch.where(torch.isnan(value), float("nan"), result)
+    return canonicalize_nan(result, torch.isnan(value))
 
 
 def cross_halves(value: torch.Tensor) -> torch.Tensor:
@@ -167,9 +173,7 @@ class MMA_T_FDP(MMAOperation):
         parts = quantize_p9(torch.ldexp(aligned.sum(dim=-1), step), False)
         parts = torch.where(positive_inf, float("inf"), parts)
         parts = torch.where(negative_inf, -float("inf"), parts)
-        parts = torch.where(
-            invalid | (positive_inf & negative_inf), float("nan"), parts
-        )
+        parts = canonicalize_nan(parts, invalid | (positive_inf & negative_inf))
         acc = torch.zeros_like(parts[..., 0])
         for index in range(32):
             acc = quantize_p9(acc.double() + parts[..., index].double(), True)
