@@ -1,4 +1,11 @@
-"""Run on a TPU v6e VM with TorchTPU installed."""
+"""Run on the matching TPU with audited bundles built by tpu/export.py.
+
+Set MMA_SIM_TPU_BUNDLES to the parent directory containing ARCH-FORMAT-kK
+bundles, e.g. TPU-v6e-bf16-k128. No runtime compilation or API fallback.
+"""
+
+import os
+from pathlib import Path
 
 import torch
 
@@ -9,22 +16,21 @@ from helper import random_test
 
 def test_tpu_v6e(trials: int = 100) -> None:
     torch.manual_seed(0)
-    for k in [128, 256]:
-        kernel = HardwareMMA("TPU-v6e", k)
+    root = Path(os.environ["MMA_SIM_TPU_BUNDLES"])
+    for fmt, k in [("bf16", 128), ("bf16", 256)]:
+        bundle = root / f"TPU-v6e-{fmt}-k{k}"
+        kernel = HardwareMMA("TPU-v6e", k, bundle=bundle, format=fmt)
         sim = MMA(
             kernel.arch,
             kernel.instruction,
             weight_load=kernel.weight_load,
-            shape=(16, k, k),
+            shape=(kernel.m, kernel.k, kernel.n),
         )
-        print(f"Testing {kernel.arch} K{k}", flush=True)
-        random_test(
-            sim,
-            kernel,
-            allow_different_nan=False,
-            trials=trials,
-            device="cpu",
+        print(
+            f"Testing {kernel.arch} {kernel.instruction} {kernel.weight_load} K{k}",
+            flush=True,
         )
+        random_test(sim, kernel, allow_different_nan=False, trials=trials, device="cpu")
     print("Tests passed!", flush=True)
 
 
