@@ -3,8 +3,9 @@
 Run this file in a separate compile-only environment, before device tests:
   python export.py --arch TPU-v6e --k 256 --out /path/to/bundle
 Use JAX/jaxlib 0.5.1 + libtpu 0.0.10 for v5e/v6e. v7 export/load requires
-its own matching runtime and --on-device export; that direct-executable path
-is not hardware-validated. Export and execution must use separate processes.
+its own matching runtime and --on-device export. The v7 direct-executable path
+has been hardware-validated for BF16 K128/K256 and FP8 E4M3FN/E5M2 K256.
+Export and execution must use separate processes.
 For equivalence tests, name each output bundle ARCH-FORMAT-kK and set
 MMA_SIM_TPU_BUNDLES to their parent directory. Example: TPU-v6e-bf16-k256.
 The output directory must be new. Keep the entire bundle for reproducibility.

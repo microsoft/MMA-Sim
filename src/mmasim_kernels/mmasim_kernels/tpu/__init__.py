@@ -120,7 +120,7 @@ class MMA(MMAKernel):
             raise ValueError(
                 "Direct executable kernels require a single-process runtime"
             )
-        self.input_dtype = {
+        self.input_dtype: type[np.generic] = {
             "bf16": ml_dtypes.bfloat16,
             "e4m3fn": ml_dtypes.float8_e4m3fn,
             "e5m2": ml_dtypes.float8_e5m2,
