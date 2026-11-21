@@ -29,10 +29,15 @@ def no_compile() -> Iterator[None]:
     import jax
     from jax._src import compiler
 
+    backend_compile = (
+        "backend_compile"
+        if hasattr(compiler, "backend_compile")
+        else "backend_compile_and_load"
+    )
     with ExitStack() as stack:
         for owner, name in (
             (jax, "jit"),
-            (compiler, "backend_compile"),
+            (compiler, backend_compile),
             (compiler, "compile_or_get_cached"),
         ):
             if not hasattr(owner, name):
@@ -135,6 +140,7 @@ class MMA(MMAKernel):
                     jax.tree_util.tree_structure(((a, b), {})),
                     output_tree,
                     backend=self.device.client,
+                    execution_devices=[self.device],
                 )
             )
             self.merge: jax.stages.Compiled = serialize_executable.deserialize_and_load(
@@ -142,6 +148,7 @@ class MMA(MMAKernel):
                 jax.tree_util.tree_structure(((c, c), {})),
                 output_tree,
                 backend=self.device.client,
+                execution_devices=[self.device],
             )
 
     def __call__(
