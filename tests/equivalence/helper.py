@@ -6,7 +6,13 @@ from mmasim_kernels import MMAKernel, MMABlockScaleKernel
 storage_type = {8: torch.uint64, 4: torch.uint32, 2: torch.uint16, 1: torch.uint8}
 
 
-def get_random_tensor(m, n, dtype: torch.dtype, device="cuda", packing=1):
+def get_random_tensor(
+    m: int,
+    n: int,
+    dtype: torch.dtype,
+    device: str = "cuda",
+    packing: int = 1,
+) -> torch.Tensor:
     tensor = torch.randint(
         -(2**31),
         2**31,
@@ -22,7 +28,9 @@ def random_test(
     kernel: MMAKernel | MMABlockScaleKernel,
     allow_different_nan: bool,
     trials: int,
-):
+    *,
+    device: str = "cuda",
+) -> None:
     m, n, k = kernel.m, kernel.n, kernel.k
     a_type = kernel.a_type
     b_type = kernel.b_type
@@ -34,9 +42,9 @@ def random_test(
         has_block_scale = kernel.block_size > 0
         packing = kernel.packing
     for _ in range(trials):
-        A = get_random_tensor(m, k, a_type, packing=packing)
-        B = get_random_tensor(n, k, b_type, packing=packing).T
-        C = get_random_tensor(m, n, c_type)
+        A = get_random_tensor(m, k, a_type, device=device, packing=packing)
+        B = get_random_tensor(n, k, b_type, device=device, packing=packing).T
+        C = get_random_tensor(m, n, c_type, device=device)
         if not has_block_scale:
             assert isinstance(sim, MMAOperation)
             assert isinstance(kernel, MMAOperation)
@@ -46,8 +54,8 @@ def random_test(
             assert isinstance(sim, MMABlockScaleOperation)
             assert isinstance(kernel, MMABlockScaleKernel)
             s_type, block_size = kernel.s_type, kernel.block_size
-            scale_A = get_random_tensor(m, k // block_size, s_type)
-            scale_B = get_random_tensor(n, k // block_size, s_type).T
+            scale_A = get_random_tensor(m, k // block_size, s_type, device=device)
+            scale_B = get_random_tensor(n, k // block_size, s_type, device=device).T
             D_gpu = kernel(A, B, C, scale_A, scale_B).cpu()
             D_sim = sim(A, B, C, scale_A, scale_B).cpu()
         D_sim_raw = D_sim.view(storage_type[d_type.itemsize])
