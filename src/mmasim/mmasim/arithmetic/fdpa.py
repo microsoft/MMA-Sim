@@ -15,13 +15,12 @@ FloatTensor = Annotated[torch.Tensor, "float32"]
 IntTensor = Annotated[torch.Tensor, "int32"]
 
 
-def pow2(e: IntTensor) -> FloatTensor | DoubleTensor:
+def pow2(e: IntTensor) -> DoubleTensor:
     # torch.ldexp and torch.pow can be inaccurate on gpu
     # torch.exp2(-127) can be inaccurate on gpu for e.dtype == torch.int32
-    # so, use DoubleTensor if e < -126 or e > 127
-    if (e < -126).any() or (e > 127).any():
-        e = e.double()
-    return torch.exp2(e)
+    # so, use DoubleTensor, which holds every power of two exactly
+    # (checking whether FloatTensor suffices would branch on data)
+    return torch.exp2(e.double())
 
 
 def frexp_and_normalize(
@@ -37,10 +36,10 @@ def frexp_and_normalize(
     if e_subnormal is None:
         e_subnormal = dtype_subnormal_exponent[x.dtype]
     subnormals = e < e_subnormal
-    s[subnormals] *= pow2(e[subnormals] - e_subnormal)
-    e[subnormals] = e_subnormal
+    s = torch.where(subnormals, s * pow2(e - e_subnormal), s).to(s.dtype)
+    e = torch.where(subnormals, e_subnormal, e)
     # handle zero
-    e[s == 0.0] = e_subnormal
+    e = torch.where(s == 0.0, e_subnormal, e)
     return s, e
 
 
@@ -63,11 +62,11 @@ def ldexp_and_normalize(s: DoubleTensor, e: IntTensor, rho: str) -> torch.Tensor
     nans = res.isnan()
     if res.dtype == torch.float16:
         res = res.view(torch.int16)
-        res[nans] = 0x7FFF
+        res = torch.where(nans, 0x7FFF, res)
         res = res.view(torch.float16)
     else:  # torch.float32
         res = res.view(torch.int32)
-        res[nans] = 0x7FFFFFFF
+        res = torch.where(nans, 0x7FFFFFFF, res)
         res = res.view(torch.float32)
     return res
 
@@ -97,7 +96,7 @@ def t_fdpa(
     s_c, e_c = frexp_and_normalize(c)
     s = torch.cat([s_a * s_b, s_c.unsqueeze(-1)], dim=-1)
     e = torch.cat([e_a + e_b, e_c.unsqueeze(-1)], dim=-1)
-    e[s == 0.0] = e_zero  # handle zero
+    e = torch.where(s == 0.0, e_zero, e)  # handle zero
     sum, e_max = truncated_fused_sum(s, e, F)
     return ldexp_and_normalize(sum, e_max, rho) + 0.0  # -0.0 to +0.0
 
@@ -174,7 +173,7 @@ def st_fdpa(
     # s_alpha, s_beta can be 1.0 or nan
     s = torch.cat([s_a * s_b * s_alpha * s_beta, s_c.unsqueeze(-1)], dim=-1)
     e = torch.cat([e_a + e_b + e_alpha + e_beta, e_c.unsqueeze(-1)], dim=-1)
-    e[s == 0.0] = e_zero  # handle zero
+    e = torch.where(s == 0.0, e_zero, e)  # handle zero
     sum, e_max = truncated_fused_sum(s, e, F)
     return ldexp_and_normalize(sum, e_max, rho) + 0.0  # -0.0 to +0.0
 
@@ -267,9 +266,9 @@ def gst_fdpa(
     s_beta, e_beta = frexp_and_normalize(beta)
     s_scale, e_scale = s_alpha * s_beta, e_alpha + e_beta
     apply_e_zero |= s_scale == 0.0
-    e_scale[apply_e_zero] = e_zero
+    e_scale = torch.where(apply_e_zero, e_zero, e_scale)
     s_c, e_c = frexp_and_normalize(c)
-    e_c[s_c == 0.0] = e_zero
+    e_c = torch.where(s_c == 0.0, e_zero, e_c)
     s = torch.cat([p * s_scale, s_c.unsqueeze(-1)], dim=-1)
     e = torch.cat([e_scale, e_c.unsqueeze(-1)], dim=-1)
     sum, e_max = truncated_fused_sum(s, e, F)
@@ -339,8 +338,8 @@ def tr_fdpa(
     s_b, e_b = frexp_and_normalize(b)
     s, e = s_a * s_b, e_a + e_b
     overflow = ((s.abs() >= 2.0) + e) >= 128
-    s[overflow] *= float("inf")
-    e[s == 0.0] = -999  # handle zero
+    s = torch.where(overflow, s * float("inf"), s)
+    e = torch.where(s == 0.0, -999, e)  # handle zero
     s_dot, e_dot = truncated_fused_sum(s, e, F)
 
     s_c, e_c = frexp_and_normalize(c)
@@ -395,7 +394,7 @@ def gtr_fdpa(
     s_b, e_b = frexp_and_normalize(b)
     s = s_a * s_b
     e = e_a + e_b
-    e[s == 0.0] = -999  # handle zero
+    e = torch.where(s == 0.0, -999, e)  # handle zero
     s_even, e_even = truncated_fused_sum(s[..., ::2], e[..., ::2], F)
     s_odd, e_odd = truncated_fused_sum(s[..., 1::2], e[..., 1::2], F)
 
@@ -407,7 +406,7 @@ def gtr_fdpa(
     e_max = torch.max(e_dot, e_c)
     s_dot = torch.floor(s_dot * pow2(e_dot - e_max + (F2 + 1))) * 2.0 ** -(F2 + 1)
     s_c = torch.floor(s_c * pow2(e_c - e_max + F)) * 2.0**-F
-    s_c[(e_c < e_max - F - 1) & s_c.isfinite()] = 0.0
+    s_c = torch.where((e_c < e_max - F - 1) & s_c.isfinite(), 0.0, s_c)
     s_dot, e_max = frexp_and_normalize((s_dot + s_c) * pow2(e_max), e_subnormal=-126)
     s_dot = torch.floor(s_dot * 2.0**F2) * 2.0**-F2
     return ldexp_and_normalize(s_dot, e_max, rho)
